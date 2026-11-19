@@ -5,6 +5,7 @@ struct TopThreeView: View {
     @ObservedObject var manager = TopThreeManager.shared
     @ObservedObject var settingsManager = SettingsManager.shared
     @Environment(\.appTheme) private var theme
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var settings: UserSettings { settingsManager.settings }
     private var todayKey: String { manager.todayKey(settings: settings) }
@@ -12,95 +13,7 @@ struct TopThreeView: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-#if os(macOS)
             themedContent
-#else
-            VStack(spacing: 14) {
-                HStack {
-                    Text("每日任务").font(.headline)
-                    Spacer()
-                    Button(manager.syncInProgress ? "同步中…" : "同步 Habitica") {
-                        Task { await manager.synchronize(settings: settings) }
-                    }
-                    .disabled(manager.syncInProgress || !settings.connectHabitica || settings.uid.isEmpty || settings.apiToken.isEmpty)
-                }
-                if let message = manager.syncMessage { Text(message).font(.caption).foregroundColor(.secondary) }
-                // ── Today 卡片：绿色调，可编辑 ──
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 8, height: 8)
-                        Text("Today")
-                            .font(.headline)
-                        Text(shortDate(todayKey))
-                            .font(.caption.monospaced())
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text("点击文字编辑 · 点击圆圈完成")
-                            .font(.caption2)
-                            .foregroundColor(.secondary.opacity(0.7))
-                    }
-
-                    ForEach(0..<manager.categoryCount, id: \.self) { cat in
-                        TopThreeCategorySection(
-                            dateKey: todayKey,
-                            category: cat,
-                            editable: true
-                        )
-                    }
-                }
-                .padding(14)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(theme.accentSoft.opacity(0.75))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(theme.line, lineWidth: 1)
-                )
-
-                // ── Yesterday 卡片：灰色调，归档感 ──
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(Color.secondary)
-                            .frame(width: 8, height: 8)
-                        Text("Yesterday")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        Text(shortDate(yesterdayKey))
-                            .font(.caption.monospaced())
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text("已归档")
-                            .font(.caption2)
-                            .foregroundColor(.secondary.opacity(0.7))
-                    }
-
-                    ForEach(0..<manager.categoryCount, id: \.self) { cat in
-                        TopThreeCategorySection(
-                            dateKey: yesterdayKey,
-                            category: cat,
-                            editable: false
-                        )
-                    }
-                }
-                .padding(14)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(theme.subtle.opacity(0.7))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(theme.line.opacity(0.8), lineWidth: 1)
-                )
-
-                unfinishedSection
-            }
-            .padding(.top, 16)
-            .padding(.bottom, 16)
-#endif
         }
         .task { await manager.synchronize(settings: settings) }
         .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { _ in
@@ -108,7 +21,6 @@ struct TopThreeView: View {
         }
     }
 
-#if os(macOS)
     private var themedContent: some View {
         VStack(alignment: .leading, spacing: theme.pageSpacing) {
             ThemedPageHeader(title: "每日任务", subtitle: "把重要的事，先做好。", symbol: "checklist")
@@ -133,7 +45,7 @@ struct TopThreeView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if theme.style == .studio {
+            if theme.showsColumns(compactWidth: horizontalSizeClass == .compact) {
                 HStack(alignment: .top, spacing: theme.pageSpacing) {
                     daySection(key: todayKey, editable: true)
                     daySection(key: yesterdayKey, editable: false)
@@ -186,7 +98,6 @@ struct TopThreeView: View {
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
-#endif
 
     private var unfinishedSection: some View {
         let today = todayKey
@@ -212,13 +123,8 @@ struct TopThreeView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-#if os(macOS)
         .foregroundStyle(theme.ink)
         .themeCard(theme, padding: theme.cardPadding)
-#else
-        .padding(14)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
-#endif
     }
 
     private func unfinishedRow(_ item: UnfinishedTask, today: String) -> some View {
@@ -255,13 +161,7 @@ struct TopThreeView: View {
         }
     }
 
-    private var unfinishedHintColor: Color {
-#if os(macOS)
-        theme.muted
-#else
-        .secondary
-#endif
-    }
+    private var unfinishedHintColor: Color { theme.muted }
 
     private func shortDate(_ key: String) -> String {
         let parts = key.split(separator: "-")
@@ -294,49 +194,15 @@ struct TopThreeCategorySection: View {
     private var completedCount: Int { tasks.filter { $0.isCompleted }.count }
     private var isFreeList: Bool { manager.isFreeList(category: category) }
 
-    private var categoryColor: Color {
-#if os(macOS)
-        return theme.accent
-#else
-        switch category {
-        case 0: return .blue
-        case 1: return .purple
-        default: return .orange
-        }
-#endif
-    }
+    private var categoryColor: Color { theme.accent }
 
-    private var mutedColor: Color {
-#if os(macOS)
-        return theme.muted
-#else
-        return .secondary
-#endif
-    }
+    private var mutedColor: Color { theme.muted }
 
-    private var completionColor: Color {
-#if os(macOS)
-        return theme.accent
-#else
-        return .green
-#endif
-    }
+    private var completionColor: Color { theme.accent }
 
-    private var hintColor: Color {
-#if os(macOS)
-        return theme.muted.opacity(0.8)
-#else
-        return .secondary.opacity(0.6)
-#endif
-    }
+    private var hintColor: Color { theme.muted.opacity(0.8) }
 
-    private var sectionSpacing: CGFloat {
-#if os(macOS)
-        return theme.rowSpacing
-#else
-        return 4
-#endif
-    }
+    private var sectionSpacing: CGFloat { theme.rowSpacing }
 
     var body: some View {
         VStack(alignment: .leading, spacing: sectionSpacing) {
@@ -377,14 +243,12 @@ struct TopThreeCategorySection: View {
             }
             .padding(.leading, 2)
 
-#if os(macOS)
             if tasks.isEmpty && !editable {
                 Text("没有归档任务")
                     .font(.system(size: 11))
                     .foregroundColor(theme.muted)
                     .padding(.vertical, 8)
             }
-#endif
 
             // 任务列表
             ForEach(tasks) { task in
@@ -535,46 +399,17 @@ struct TaskRow: View {
     }
 
     private var titleColor: Color {
-#if os(macOS)
         if task.title.isEmpty || task.isCompleted || !editable { return theme.muted }
         return theme.ink
-#else
-        if task.title.isEmpty { return .secondary.opacity(editable ? 0.7 : 0.4) }
-        return editable ? .primary : .primary.opacity(0.65)
-#endif
     }
 
-    private var mutedColor: Color {
-#if os(macOS)
-        return theme.muted
-#else
-        return .secondary
-#endif
-    }
+    private var mutedColor: Color { theme.muted }
 
-    private var completionColor: Color {
-#if os(macOS)
-        return theme.accent
-#else
-        return .green
-#endif
-    }
+    private var completionColor: Color { theme.accent }
 
-    private var movedColor: Color {
-#if os(macOS)
-        return theme.accent
-#else
-        return .blue
-#endif
-    }
+    private var movedColor: Color { theme.accent }
 
-    private var rowPadding: CGFloat {
-#if os(macOS)
-        return theme.style == .garden ? 4 : 2
-#else
-        return 1
-#endif
-    }
+    private var rowPadding: CGFloat { theme.style == .garden ? 4 : 2 }
 }
 
 private struct TaskDeleteButton: View {
@@ -603,7 +438,6 @@ private struct TaskInputStyle: ViewModifier {
     @Environment(\.appTheme) private var theme
 
     func body(content: Content) -> some View {
-#if os(macOS)
         content
             .textFieldStyle(.plain)
             .foregroundColor(theme.ink)
@@ -612,18 +446,15 @@ private struct TaskInputStyle: ViewModifier {
             .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(theme.subtle))
             .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(theme.line, lineWidth: 1))
             .tint(theme.accent)
-#else
-        content.textFieldStyle(.roundedBorder)
-#endif
     }
 }
 
 private struct TaskActionTarget: ViewModifier {
     func body(content: Content) -> some View {
-#if os(macOS)
+        #if os(macOS)
         content.frame(minWidth: 24, minHeight: 26).contentShape(Rectangle())
-#else
-        content
-#endif
+        #else
+        content.frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+        #endif
     }
 }

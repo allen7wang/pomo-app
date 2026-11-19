@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -26,6 +27,8 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -43,6 +46,8 @@ import com.habitica.pomodoro.ui.TaskScreen
 import com.habitica.pomodoro.ui.HabiticaListsScreen
 import com.habitica.pomodoro.ui.HistoryScreen
 import com.habitica.pomodoro.ui.theme.HabiticaPomodoroTheme
+import com.habitica.pomodoro.ui.theme.SkinPaletteButton
+import com.habitica.pomodoro.ui.theme.rememberAppSkinState
 
 class MainActivity : ComponentActivity() {
 
@@ -59,12 +64,14 @@ class MainActivity : ComponentActivity() {
         requestNotificationPermissionIfNeeded()
 
         setContent {
-            HabiticaPomodoroTheme {
+            val skins = rememberAppSkinState()
+            val style by skins.style
+            HabiticaPomodoroTheme(style = style) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    RootTabs(vm)
+                    RootTabs(vm, skins)
                 }
             }
         }
@@ -105,13 +112,25 @@ class MainActivity : ComponentActivity() {
 }
 
 /** Six compact destinations; Habits and Dailies share one live Habitica page. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RootTabs(vm: PomodoroViewModel) {
+private fun RootTabs(vm: PomodoroViewModel, skins: com.habitica.pomodoro.ui.theme.AppSkinState) {
     var selected by remember { mutableIntStateOf(0) }
     val state by vm.state.collectAsStateWithLifecycle()
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = {},
+                actions = { SkinPaletteButton(skins) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(
@@ -163,7 +182,7 @@ private fun RootTabs(vm: PomodoroViewModel) {
             2 -> HabiticaListsScreen(vm = vm, state = state, modifier = modifier)
             3 -> HistoryScreen(vm = vm, state = state, modifier = modifier)
             4 -> RoleScreen(vm = vm, state = state, modifier = modifier)
-            5 -> SettingsScreen(vm = vm, state = state, modifier = modifier)
+            5 -> SettingsScreen(vm = vm, state = state, skins = skins, modifier = modifier)
         }
     }
 }

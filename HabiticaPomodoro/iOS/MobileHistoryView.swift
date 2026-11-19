@@ -5,6 +5,7 @@ struct MobileHistoryView: View {
     @ObservedObject private var histogram = HistogramManager.shared
     @ObservedObject private var blocks = BlockProgressManager.shared
     @ObservedObject private var plants = PlantJournal.shared
+    @Environment(\.appTheme) private var theme
     @State private var confirmClear = false
     @State private var clearBlocks = false
 
@@ -68,6 +69,9 @@ struct MobileHistoryView: View {
             }
         }
         .navigationTitle("统计与历史")
+        .scrollContentBackground(.hidden)
+        .background(theme.background)
+        .tint(theme.accent)
         .confirmationDialog("确认清空番茄统计？不删除时间块、植物或 Task。", isPresented: $confirmClear) {
             Button("清空番茄统计", role: .destructive) { histogram.clear() }
         }

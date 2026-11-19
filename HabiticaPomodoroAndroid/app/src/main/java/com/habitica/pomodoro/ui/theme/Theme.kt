@@ -5,32 +5,67 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
-
-// 番茄红 / 专注蓝 —— 与 macOS 版视觉基调一致
-private val TomatoRed = Color(0xFFE8534F)
-private val FocusBlue = Color(0xFF4A90D9)
-private val LeafGreen = Color(0xFF4CAF7D)
-
-private val LightColors = lightColorScheme(
-    primary = TomatoRed,
-    secondary = FocusBlue,
-    tertiary = LeafGreen,
-)
-
-private val DarkColors = darkColorScheme(
-    primary = TomatoRed,
-    secondary = FocusBlue,
-    tertiary = LeafGreen,
-)
+import androidx.compose.runtime.CompositionLocalProvider
 
 @Composable
 fun HabiticaPomodoroTheme(
+    style: AppUiStyle = AppUiStyle.Mint,
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
-        content = content,
-    )
+    val palette = skinPalette(style, darkTheme)
+    val scheme = if (darkTheme) darkScheme(palette) else lightScheme(palette)
+    CompositionLocalProvider(LocalAppSkin provides style) {
+        MaterialTheme(colorScheme = scheme, content = content)
+    }
 }
+
+private fun lightScheme(p: SkinPalette) = lightColorScheme(
+    primary = p.color(p.accent),
+    onPrimary = p.color(p.onAccent),
+    primaryContainer = p.color(p.accentSoft),
+    onPrimaryContainer = p.color(p.ink),
+    secondary = p.color(p.accent),
+    onSecondary = p.color(p.onAccent),
+    secondaryContainer = p.color(p.accentSoft),
+    onSecondaryContainer = p.color(p.ink),
+    tertiary = p.color(p.accent),
+    onTertiary = p.color(p.onAccent),
+    background = p.color(p.background),
+    onBackground = p.color(p.ink),
+    surface = p.color(p.surface),
+    onSurface = p.color(p.ink),
+    surfaceVariant = p.color(p.subtle),
+    onSurfaceVariant = p.color(p.muted),
+    outline = p.color(p.line),
+    outlineVariant = p.color(p.line),
+    surfaceContainer = p.color(p.surface),
+    surfaceContainerLow = p.color(p.background),
+    surfaceContainerHigh = p.color(p.subtle),
+    surfaceContainerLowest = p.color(p.background),
+)
+
+private fun darkScheme(p: SkinPalette) = darkColorScheme(
+    primary = p.color(p.accent),
+    onPrimary = p.color(p.onAccent),
+    primaryContainer = p.color(p.accentSoft),
+    onPrimaryContainer = p.color(p.ink),
+    secondary = p.color(p.accent),
+    onSecondary = p.color(p.onAccent),
+    secondaryContainer = p.color(p.accentSoft),
+    onSecondaryContainer = p.color(p.ink),
+    tertiary = p.color(p.accent),
+    onTertiary = p.color(p.onAccent),
+    background = p.color(p.background),
+    onBackground = p.color(p.ink),
+    surface = p.color(p.surface),
+    onSurface = p.color(p.ink),
+    surfaceVariant = p.color(p.subtle),
+    onSurfaceVariant = p.color(p.muted),
+    outline = p.color(p.line),
+    outlineVariant = p.color(p.line),
+    surfaceContainer = p.color(p.surface),
+    surfaceContainerLow = p.color(p.background),
+    surfaceContainerHigh = p.color(p.subtle),
+    surfaceContainerLowest = p.color(p.background),
+)

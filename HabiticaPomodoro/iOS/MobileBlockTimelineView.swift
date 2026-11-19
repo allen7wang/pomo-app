@@ -4,6 +4,7 @@ import SwiftUI
 struct MobileBlockTimelineView: View {
     @ObservedObject private var settingsManager = SettingsManager.shared
     @ObservedObject private var blocks = BlockProgressManager.shared
+    @Environment(\.appTheme) private var theme
     @State private var selection: Int?
     private var settings: UserSettings { settingsManager.settings }
 
@@ -11,13 +12,14 @@ struct MobileBlockTimelineView: View {
         ScrollViewReader { proxy in
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("Block Timeline").font(.headline)
+                    Text("时间线").font(.system(size: 13, weight: .semibold)).foregroundColor(theme.ink)
                     Spacer()
                     Button {
                         blocks.updateBlockIndexFromTime(settings: settings)
                         withAnimation { proxy.scrollTo(blocks.blockProgress.currentBlockIndex, anchor: .center) }
-                    } label: { Label("Current", systemImage: "location.fill") }
+                    } label: { Label("当前", systemImage: "location.fill") }
                         .font(.caption)
+                        .foregroundColor(theme.accent)
                 }
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
@@ -41,11 +43,12 @@ struct MobileBlockTimelineView: View {
                                     Text("任务 \(tasks.filter(\.isCompleted).count)/\(tasks.count)")
                                         .font(.caption2)
                                 }
-                                .foregroundColor(isCurrent ? .white : .primary)
-                                .tint(isCurrent ? .white : .orange)
+                                .foregroundColor(isCurrent ? theme.onAccent : theme.ink)
+                                .tint(isCurrent ? theme.onAccent : theme.accent)
                                 .frame(width: 142, height: 152, alignment: .topLeading)
                                 .padding(12)
-                                .background(isCurrent ? Color.orange : Color.cardBackground, in: RoundedRectangle(cornerRadius: 12))
+                                .background(isCurrent ? theme.accent : theme.surface, in: RoundedRectangle(cornerRadius: 12))
+                                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(isCurrent ? theme.accent : theme.line, lineWidth: 1))
                             }
                             .buttonStyle(.plain)
                             .id(index)

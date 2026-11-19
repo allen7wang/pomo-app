@@ -75,6 +75,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 // MARK: - Root Tab View (底部标签栏)
 struct RootTabView: View {
     @StateObject private var tabState = AppTabState.shared
+    @ObservedObject private var styleStore = UIStyleStore.shared
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var theme: AppTheme {
+        AppTheme(style: styleStore.style, dark: colorScheme == .dark)
+    }
 
     var body: some View {
         TabView(selection: $tabState.selectedTab) {
@@ -82,25 +88,42 @@ struct RootTabView: View {
                 .tabItem { Label("Pomo", systemImage: "timer") }
                 .tag(0)
 
-            TopThreeView().padding(.horizontal, 16)
+            themedTab { TopThreeView() }
                 .tabItem { Label("Task", systemImage: "star.fill") }
                 .tag(1)
 
-            HabiticaHabitsView()
+            themedTab { HabiticaHabitsView() }
                 .tabItem { Label("Habits", systemImage: "plusminus.circle") }
                 .tag(2)
 
-            HabiticaDailiesView()
+            themedTab { HabiticaDailiesView() }
                 .tabItem { Label("Dailies", systemImage: "checkmark.square") }
                 .tag(3)
 
-            HabiticaProfileView()
+            themedTab { HabiticaProfileView() }
                 .tabItem { Label("Role", systemImage: "person.crop.circle") }
                 .tag(4)
 
             MobileSettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(9)
+        }
+        .tint(theme.accent)
+        .environment(\.appTheme, theme)
+        .toolbarBackground(theme.surface, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
+    }
+
+    private func themedTab<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        NavigationStack {
+            content()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(theme.background.ignoresSafeArea())
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) { SkinPaletteButton() }
+                }
+                .toolbarBackground(theme.background, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
         }
     }
 }

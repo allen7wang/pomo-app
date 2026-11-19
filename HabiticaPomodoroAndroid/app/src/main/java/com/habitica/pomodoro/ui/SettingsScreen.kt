@@ -40,6 +40,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.habitica.pomodoro.engine.PomodoroViewModel
 import com.habitica.pomodoro.engine.PomodoroViewModel.UiState
+import com.habitica.pomodoro.ui.theme.AppearanceStylePicker
+import com.habitica.pomodoro.ui.theme.AppSkinState
 
 /**
  * 设置页。一般选项即时保存；User ID 和自定义 API 地址校验后明确应用。
@@ -51,6 +53,7 @@ import com.habitica.pomodoro.engine.PomodoroViewModel.UiState
 fun SettingsScreen(
     vm: PomodoroViewModel,
     state: UiState,
+    skins: AppSkinState,
     modifier: Modifier = Modifier,
 ) {
     val s = state.settings
@@ -82,6 +85,10 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text("设置", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+
+        SettingsCard(title = "外观") {
+            AppearanceStylePicker(skins)
+        }
 
         // MARK: Habitica
         SettingsCard(title = "Habitica") {

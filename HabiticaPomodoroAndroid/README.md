@@ -2,7 +2,7 @@
 
 Kotlin + Jetpack Compose 客户端。以 macOS 的可移植业务为基准，不机械复制桌面布局。
 
-> **当前状态（2026-10-23）**：`v1.2.5-android` 已发布，APK 为 `HabiticaPomodoro-Android-1.2.5.apk`（versionCode 5）。下方 2026-10-03 记录属于历史，不代表当前仍未发布或那些续修仍未完成。现有离线回归见 [fixtures/README.md](fixtures/README.md)，跨端最新记录见 [FEATURE_PARITY.md](../HabiticaPomodoro/FEATURE_PARITY.md)。本轮 Android 生产代码未变；暂无 Android 真机，真机验收继续暂缓。
+> **当前状态（2026-11-19）**：`v1.2.6-android` 增加与 Mac/iOS 相同的三套皮肤（清新原生 / 留白花园 / 效率工作台），选择只存在本机。APK 为 `HabiticaPomodoro-Android-1.2.6.apk`（versionCode 6）。离线回归见 [fixtures/README.md](fixtures/README.md)。本轮未改计时与同步逻辑；没有 Android 真机，未做真机验收。
 
 ## 已实现的功能
 

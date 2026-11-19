@@ -3,7 +3,7 @@ import SwiftUI
 import AppKit
 #endif
 
-// MARK: - Visual styles (user-switchable, Mac first)
+// MARK: - Visual styles (user-switchable; Mac and iOS share the same three skins)
 
 enum AppUIStyle: String, CaseIterable, Identifiable {
     case mint
@@ -78,6 +78,11 @@ struct AppTheme {
     var pageSpacing: CGFloat { style == .garden ? 18 : 14 }
     var cardPadding: CGFloat { style == .garden ? 18 : 14 }
     var rowSpacing: CGFloat { style == .garden ? 10 : 8 }
+
+    /// Studio's side-by-side columns only fit a regular width. iPhone stays stacked.
+    func showsColumns(compactWidth: Bool) -> Bool {
+        style == .studio && !compactWidth
+    }
 
     init(style: AppUIStyle, dark: Bool) {
         self.style = style
@@ -339,6 +344,95 @@ struct RingTimer: View {
         }
         .frame(width: size, height: size)
         .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - Skin switcher (iOS toolbar + settings; Mac keeps its own header menu)
+
+struct SkinPaletteButton: View {
+    @ObservedObject private var styleStore = UIStyleStore.shared
+    @Environment(\.appTheme) private var theme
+
+    var body: some View {
+        Menu {
+            ForEach(AppUIStyle.allCases) { style in
+                Button {
+                    styleStore.style = style
+                } label: {
+                    if style == styleStore.style {
+                        Label("\(style.title) · \(style.tagline)", systemImage: "checkmark")
+                    } else {
+                        Label("\(style.title) · \(style.tagline)", systemImage: style.symbol)
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "paintpalette")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(theme.muted)
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel("切换界面风格")
+    }
+}
+
+struct AppearanceStylePicker: View {
+    @ObservedObject private var styleStore = UIStyleStore.shared
+    @Environment(\.appTheme) private var theme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("三种皮肤可随时切换。选择保存在本机，不影响任务、计时或同步。")
+                .font(.caption)
+                .foregroundColor(theme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(AppUIStyle.allCases) { style in
+                card(style)
+            }
+            Text("当前：\(styleStore.style.title)。各页右上角的调色板也可以切换。")
+                .font(.caption2)
+                .foregroundColor(theme.muted)
+        }
+    }
+
+    private func card(_ style: AppUIStyle) -> some View {
+        let preview = AppTheme(style: style, dark: theme.dark)
+        let selected = styleStore.style == style
+        return Button {
+            styleStore.style = style
+        } label: {
+            HStack(spacing: 12) {
+                HStack(spacing: 4) {
+                    Circle().fill(preview.accent).frame(width: 12, height: 12)
+                    Circle().fill(preview.accentSoft).frame(width: 12, height: 12)
+                    Circle()
+                        .fill(preview.background)
+                        .frame(width: 12, height: 12)
+                        .overlay(Circle().strokeBorder(preview.line, lineWidth: 1))
+                }
+                .frame(width: 52, alignment: .leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(style.title).font(.system(size: 15, weight: .medium)).foregroundColor(theme.ink)
+                    Text(style.tagline).font(.caption).foregroundColor(theme.muted)
+                }
+                Spacer(minLength: 0)
+                if selected {
+                    Image(systemName: "checkmark.circle.fill").foregroundColor(theme.accent)
+                }
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(selected ? theme.accentSoft : theme.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(selected ? theme.accent.opacity(0.55) : theme.line, lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.sp
 import com.habitica.pomodoro.engine.PomodoroViewModel
 import com.habitica.pomodoro.engine.PomodoroViewModel.Phase
 import com.habitica.pomodoro.engine.PomodoroViewModel.UiState
+import com.habitica.pomodoro.ui.theme.AppUiStyle
+import com.habitica.pomodoro.ui.theme.LocalAppSkin
 import java.util.Locale
 
 /** 番茄钟主页：圆环计时器 + 主控制按钮 + 今日统计 */
@@ -49,15 +51,27 @@ fun PomoScreen(
     state: UiState,
     modifier: Modifier = Modifier,
 ) {
+    val skin = LocalAppSkin.current
+    val spacing = if (skin == AppUiStyle.Garden) 24.dp else if (skin == AppUiStyle.Studio) 12.dp else 16.dp
+    val ringSize = when (skin) {
+        AppUiStyle.Garden -> 250.dp
+        AppUiStyle.Studio -> 168.dp
+        AppUiStyle.Mint -> 220.dp
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+            .padding(horizontal = if (skin == AppUiStyle.Garden) 26.dp else 18.dp, vertical = 8.dp),
+        horizontalAlignment = if (skin == AppUiStyle.Mint) Alignment.Start else Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(spacing),
     ) {
-        Spacer(Modifier.height(8.dp))
+        if (skin == AppUiStyle.Garden) {
+            Text("留一刻，给自己。", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onBackground)
+        } else if (skin == AppUiStyle.Mint) {
+            Text("你的专注", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("把重要的事，先做好。", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+        }
 
         Text(
             text = phaseLabel(state.phase),
@@ -65,21 +79,42 @@ fun PomoScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        TimerRing(
-            remainingSeconds = state.remainingSeconds,
-            totalSeconds = state.totalSeconds,
-            isRunning = state.isRunning,
-            phase = state.phase,
-            onClick = { vm.activate() },
-        )
-
-        ControlButtons(state = state, vm = vm)
+        if (skin == AppUiStyle.Studio) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                TimerRing(
+                    remainingSeconds = state.remainingSeconds,
+                    totalSeconds = state.totalSeconds,
+                    isRunning = state.isRunning,
+                    phase = state.phase,
+                    ringSize = ringSize,
+                    onClick = { vm.activate() },
+                )
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    StatsCard(state = state)
+                }
+            }
+            ControlButtons(state = state, vm = vm)
+        } else {
+            TimerRing(
+                remainingSeconds = state.remainingSeconds,
+                totalSeconds = state.totalSeconds,
+                isRunning = state.isRunning,
+                phase = state.phase,
+                ringSize = ringSize,
+                onClick = { vm.activate() },
+            )
+            ControlButtons(state = state, vm = vm)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf(1, 5, 15, 30).forEach { minutes -> androidx.compose.material3.TextButton(onClick = { vm.takeBreak(minutes) }, enabled = state.phase == Phase.IDLE && !state.isRunning) { Text("休息 ${minutes}m") } }
         }
         if (state.phase == Phase.POMODORO) androidx.compose.material3.TextButton(onClick = vm::skipToBreak) { Text("跳到短休息（不计完成）") }
 
-        StatsCard(state = state)
+        if (skin != AppUiStyle.Studio) StatsCard(state = state)
         if (state.settings.enableBlockMode) BlockGarden(vm, state)
     }
 }
@@ -101,6 +136,7 @@ private fun TimerRing(
     totalSeconds: Int,
     isRunning: Boolean,
     phase: Phase,
+    ringSize: androidx.compose.ui.unit.Dp = 240.dp,
     onClick: () -> Unit,
 ) {
     val progress = if (totalSeconds > 0) {
@@ -123,7 +159,7 @@ private fun TimerRing(
 
     Box(
         modifier = Modifier
-            .size(240.dp),
+        .size(ringSize),
         contentAlignment = Alignment.Center,
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {

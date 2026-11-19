@@ -1,7 +1,6 @@
 import SwiftUI
 
-#if os(macOS)
-/// Shared page chrome keeps connected, empty and error states aligned with the focus skin.
+// MARK: - Shared page chrome keeps connected, empty and error states aligned with the focus skin.
 private struct HabiticaPageChrome<Content: View>: View {
     @Environment(\.appTheme) private var theme
     let title: String
@@ -69,13 +68,10 @@ private struct HabiticaLoadingState: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
-#endif
 
 // MARK: - Habits Tab (Habitica 习惯列表，支持 +/- 打分)
 struct HabiticaHabitsView: View {
-    #if os(macOS)
     @Environment(\.appTheme) private var theme
-    #endif
 
     @ObservedObject var engine = PomodoroEngine.shared
     @ObservedObject var settingsManager = SettingsManager.shared
@@ -90,12 +86,8 @@ struct HabiticaHabitsView: View {
     @State private var accountGeneration = 0
 
     var body: some View {
-        #if os(macOS)
         themedBody
             .task(id: accountSignature) { await load() }
-        #else
-        legacyBody
-        #endif
     }
 
     private var legacyBody: some View {
@@ -236,9 +228,7 @@ struct HabiticaHabitsView: View {
 
 // MARK: - Habit Row
 struct HabitRow: View {
-    #if os(macOS)
     @Environment(\.appTheme) private var theme
-    #endif
 
     let item: HabiticaTaskItem
     let onScore: (String) -> Void
@@ -253,11 +243,7 @@ struct HabitRow: View {
     }
 
     var body: some View {
-        #if os(macOS)
         themedBody
-        #else
-        legacyBody
-        #endif
     }
 
     private var legacyBody: some View {
@@ -319,9 +305,7 @@ struct HabitRow: View {
 
 // MARK: - Dailies Tab (今日打卡)
 struct HabiticaDailiesView: View {
-    #if os(macOS)
     @Environment(\.appTheme) private var theme
-    #endif
 
     @ObservedObject var engine = PomodoroEngine.shared
     @ObservedObject var settingsManager = SettingsManager.shared
@@ -335,12 +319,8 @@ struct HabiticaDailiesView: View {
     @State private var accountGeneration = 0
 
     var body: some View {
-        #if os(macOS)
         themedBody
             .task(id: accountSignature) { await load() }
-        #else
-        legacyBody
-        #endif
     }
 
     private var legacyBody: some View {
@@ -464,20 +444,14 @@ struct HabiticaDailiesView: View {
 
 // MARK: - Daily Row
 struct DailyRow: View {
-    #if os(macOS)
     @Environment(\.appTheme) private var theme
-    #endif
 
     let item: HabiticaTaskItem
     let busy: Bool
     let onToggle: () -> Void
 
     var body: some View {
-        #if os(macOS)
         themedBody
-        #else
-        legacyBody
-        #endif
     }
 
     private var legacyBody: some View {
@@ -520,9 +494,8 @@ struct DailyRow: View {
 
 // MARK: - Role Tab (Habitica 角色信息：血量/法力/经验/属性)
 struct HabiticaProfileView: View {
-    #if os(macOS)
     @Environment(\.appTheme) private var theme
-    #endif
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @ObservedObject var engine = PomodoroEngine.shared
     @ObservedObject var settingsManager = SettingsManager.shared
@@ -534,12 +507,8 @@ struct HabiticaProfileView: View {
     @State private var loadGeneration = 0
 
     var body: some View {
-        #if os(macOS)
         themedBody
             .task(id: accountSignature) { await load() }
-        #else
-        legacyBody
-        #endif
     }
 
     private var legacyBody: some View {
@@ -719,9 +688,7 @@ struct HabiticaProfileView: View {
 
 // MARK: - StatBar
 struct StatBar: View {
-    #if os(macOS)
     @Environment(\.appTheme) private var theme
-    #endif
 
     let icon: String
     let color: Color
@@ -731,11 +698,7 @@ struct StatBar: View {
     var valueText: String? = nil
 
     var body: some View {
-        #if os(macOS)
         themedBody
-        #else
-        legacyBody
-        #endif
     }
 
     private var legacyBody: some View {
@@ -768,20 +731,14 @@ struct StatBar: View {
 
 // MARK: - AttrCell
 struct AttrCell: View {
-    #if os(macOS)
     @Environment(\.appTheme) private var theme
-    #endif
 
     let name: String
     let value: Int
     let color: Color
 
     var body: some View {
-        #if os(macOS)
         themedBody
-        #else
-        legacyBody
-        #endif
     }
 
     private var legacyBody: some View {
@@ -805,19 +762,13 @@ struct AttrCell: View {
 
 // MARK: - AchieveCell
 struct AchieveCell: View {
-    #if os(macOS)
     @Environment(\.appTheme) private var theme
-    #endif
 
     let name: String
     let value: String
 
     var body: some View {
-        #if os(macOS)
         themedBody
-        #else
-        legacyBody
-        #endif
     }
 
     private var legacyBody: some View {
@@ -838,8 +789,7 @@ struct AchieveCell: View {
     }
 }
 
-#if os(macOS)
-// MARK: - Habitica pages in the active Mac skin
+// MARK: - Habitica pages in the active skin
 
 extension HabiticaHabitsView {
     private var themedBody: some View {
@@ -1001,7 +951,7 @@ extension HabiticaProfileView {
                 HabiticaLoadingState()
             } else if let p = profile {
                 ScrollView(showsIndicators: false) {
-                    if theme.style == .studio {
+                    if theme.showsColumns(compactWidth: horizontalSizeClass == .compact) {
                         HStack(alignment: .top, spacing: theme.pageSpacing) {
                             VStack(spacing: theme.pageSpacing) {
                                 identityCard(p)
@@ -1042,7 +992,7 @@ extension HabiticaProfileView {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(theme.ink)
                     .lineLimit(1)
-                    .help(p.username)
+                    .modifier(MacHelp(text: p.username))
                 Text(p.className.isEmpty ? "Lv.\(p.level)" : "\(p.className) · Lv.\(p.level)")
                     .font(.system(size: 11))
                     .foregroundColor(theme.muted)
@@ -1155,4 +1105,3 @@ extension AchieveCell {
         .accessibilityElement(children: .combine)
     }
 }
-#endif

@@ -38,3 +38,15 @@ extension View {
         self.padding(.top, value)
     }
 }
+
+/// macOS tooltip. `.help` is unavailable on iOS.
+struct MacHelp: ViewModifier {
+    let text: String
+    func body(content: Content) -> some View {
+        #if os(macOS)
+        content.help(text)
+        #else
+        content
+        #endif
+    }
+}

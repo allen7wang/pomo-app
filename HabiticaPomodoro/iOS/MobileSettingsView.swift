@@ -5,6 +5,7 @@ struct MobileSettingsView: View {
     @ObservedObject var sm = SettingsManager.shared
     @ObservedObject private var audio = AudioManager.shared
     @ObservedObject private var api = HabiticaAPI.shared
+    @Environment(\.appTheme) private var theme
     @State private var connecting = false
     @State private var resetBlockConfirmation = false
     @State private var clearBlockConfirmation = false
@@ -13,6 +14,14 @@ struct MobileSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    AppearanceStylePicker()
+                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                        .listRowBackground(theme.background)
+                } header: {
+                    Text("外观")
+                }
+
                 // Habitica 账号
                 Section("Habitica") {
                     Toggle("连接 Habitica", isOn: $sm.settings.connectHabitica)
@@ -157,7 +166,15 @@ struct MobileSettingsView: View {
                         .font(.caption).foregroundColor(.secondary)
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle("设置")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { SkinPaletteButton() }
+            }
+            .toolbarBackground(theme.background, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .scrollContentBackground(.hidden)
+            .background(theme.background)
+            .tint(theme.accent)
             .confirmationDialog("重置当前块计数？", isPresented: $resetBlockConfirmation) {
                 Button("重置", role: .destructive) { BlockProgressManager.shared.resetCurrentBlockProgress(settings: sm.settings) }
             }
