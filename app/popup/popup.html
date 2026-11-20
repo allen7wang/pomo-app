@@ -113,6 +113,15 @@
                                         </select><input id="breakEndSoundVolume" type="range" min="0" max="1"
                                                 step="0.01" value="0.5">
                                         <br>
+                                        <label for="ambientSource"><b>Ambient source:</b></label><br>
+                                        <select id="ambientSource">
+                                                <option value="custom">Custom</option>
+                                                <option value="qishi">Qishi Random</option>
+                                        </select>
+                                        <br>
+                                        <span id="qishiAmbientNote" class="setting-note" style="display:none">每个番茄随机播放一个栖时场景混音。暂停后继续同一场景，不与上个番茄重复。</span>
+                                        <button type="button" id="qishiPreview" style="display:none">试听随机场景</button>
+                                        <br>
                                         <label for="ambientSound"><b>Ambient sound:</b></label><br>
                                         <select id="ambientSound">
                                                 <option value="None">None</option>

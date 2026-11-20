@@ -1,6 +1,6 @@
 # Habitica Pomodoro / SiteKeeper
 
-本仓库同时保留原始浏览器扩展，以及目前维护的 macOS、iOS、Android 原生番茄钟。原生应用包含番茄计时、时间块、种植记录、每日三件事、Habitica 集成与栖时随机场景背景音。
+本仓库同时保留原始浏览器扩展，以及目前维护的 macOS、iOS、Android 原生番茄钟。原生应用包含番茄计时、时间块、种植记录、每日三件事、Habitica 集成与栖时随机场景背景音。浏览器扩展在设置里把 Ambient source 选为 Qishi Random 后，专注番茄同样随机播放一个栖时场景混音：暂停后续同一场景，不与上一个番茄重复。
 
 ## 项目入口
 

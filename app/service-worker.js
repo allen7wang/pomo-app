@@ -13,7 +13,8 @@ console.log("This prints to the console of the service worker (background script
 // extension, simply do `importScripts('path/to/file.js')`.
 // The path should be relative to the file `manifest.json`.
 importScripts('library/habiticaAPI.js');
-importScripts('library/utility.js')
+importScripts('library/utility.js');
+importScripts('library/qishiAmbient.js');
 
 //------synced variables with popup.js , includes only data (not pointers nor functions)------//
 var Consts = {
@@ -81,6 +82,12 @@ var Vars = {
 };
 // -------------------------background variables----------------------------- //
 var currentAmbientAudio = null; //current playing ambient sound
+var currentQishiSceneId = null;
+var lastQishiSceneId = null;
+var qishiPaused = false;
+var qishiStartPending = false;
+var qishiPendingPreset = null;
+const QISHI_LAST_SCENE_KEY = "qishiLastSceneId";
 const BROWSER = getBrowser();
 const PageOverlayCSS = "foreground/pageOverlay.css";
 const PageOverlayJS = "foreground/pageOverlay.js";
@@ -123,6 +130,7 @@ function UserSettings(copyFrom) {
     this.pomodoroEndSound = copyFrom ? copyFrom.pomodoroEndSound : "None";
     this.breakEndSound = copyFrom ? copyFrom.breakEndSound : "None";
     this.ambientSound = copyFrom ? copyFrom.ambientSound : "None";
+    this.ambientSource = copyFrom && copyFrom.ambientSource === "qishi" ? "qishi" : "custom";
     this.pomodoroEndSoundVolume = copyFrom ? copyFrom.pomodoroEndSoundVolume : 0.5;
     this.breakEndSoundVolume = copyFrom ? copyFrom.breakEndSoundVolume : 0.5;
     this.ambientSoundVolume = copyFrom ? copyFrom.ambientSoundVolume : 0.5;
@@ -956,7 +964,7 @@ function startPomodoro() {
     Vars.TimerFreeze = false;
     startTimer(duration, duringPomodoro, pomodoroEnds);
     muteBlockedtabs();
-    playSound(Vars.UserData.ambientSound, Vars.UserData.ambientSoundVolume, true);
+    playFocusAmbient(true);
 }
 
 //runs during pomodoro session
@@ -965,7 +973,7 @@ function duringPomodoro() {
     updateBadgeDisplay();
     //Block current tab if necessary
     CurrentTab(blockSiteOverlay);
-    playSound(Vars.UserData.ambientSound, Vars.UserData.ambientSoundVolume, true);
+    playFocusAmbient(false);
 }
 
 function setTodaysHistogram(pomodoros, minutes) {
@@ -1196,11 +1204,17 @@ function pauseTimer() {
 function pomoFreeze() {
     Vars.TimerFreeze = true;
     pauseTimer();
-    stopAmbientSound();
+    if (isQishiAmbient()) {
+        qishiPaused = true;
+        pauseQishiAmbient();
+    } else {
+        stopAmbientSound();
+    }
 }
 
 function pomoUnFreeze(){
     Vars.TimerFreeze=false;
+    if (isQishiAmbient()) playFocusAmbient(false);
     startTimer(Vars.TimerValue, duringPomodoro, pomodoroEnds);
 }
 
@@ -1321,7 +1335,149 @@ function isFreePassTimeNow() {
 }
 
 //---Offscreen Sound Manager---
-// Ensure offscreen audio page exists
+var qishiSessionGen = 0;
+
+function isQishiAmbient() {
+    return Vars.UserData && Vars.UserData.ambientSource === "qishi";
+}
+
+async function loadQishiLibrary() {
+    if (loadQishiLibrary.cache) return loadQishiLibrary.cache;
+    if (!loadQishiLibrary.pending) {
+        loadQishiLibrary.pending = fetch(chrome.runtime.getURL("audio/qishi_presets.json"))
+            .then(function (response) {
+                if (!response.ok) throw new Error("qishi catalog " + response.status);
+                return response.json();
+            })
+            .then(function (data) {
+                loadQishiLibrary.cache = Array.isArray(data.presets) ? data.presets : [];
+                return loadQishiLibrary.cache;
+            })
+            .catch(function (error) {
+                console.log("栖时场景库不可用", error);
+                loadQishiLibrary.pending = null;
+                return [];
+            });
+    }
+    return loadQishiLibrary.pending;
+}
+
+async function rememberedQishiSceneId() {
+    if (lastQishiSceneId) return lastQishiSceneId;
+    try {
+        var stored = await chrome.storage.session.get(QISHI_LAST_SCENE_KEY);
+        lastQishiSceneId = stored[QISHI_LAST_SCENE_KEY] || null;
+    } catch (error) {}
+    return lastQishiSceneId;
+}
+
+function rememberQishiScene(id) {
+    lastQishiSceneId = id;
+    currentQishiSceneId = id;
+    try {
+        chrome.storage.session.set({ [QISHI_LAST_SCENE_KEY]: id });
+    } catch (error) {}
+}
+
+async function sendOffscreen(message) {
+    await ensureOffscreenDocument();
+    try {
+        return await chrome.runtime.sendMessage(message);
+    } catch (error) {
+        await new Promise(function (resolve) { setTimeout(resolve, 200); });
+        return await chrome.runtime.sendMessage(message);
+    }
+}
+
+function playFocusAmbient(newSession) {
+    if (!isQishiAmbient()) {
+        var customSound = Vars.UserData.ambientSound;
+        var customVolume = Vars.UserData.ambientSoundVolume;
+        if (currentQishiSceneId || qishiPaused) {
+            stopAmbientSound().then(function () {
+                playSound(customSound, customVolume, true);
+            }).catch(function (error) {
+                console.log("qishi stop", error);
+            });
+        } else {
+            playSound(customSound, customVolume, true);
+        }
+        return;
+    }
+    beginQishiSession(newSession).catch(function (error) {
+        console.log("qishi ambient", error);
+    });
+}
+
+async function beginQishiSession(newSession) {
+    if (!newSession && currentQishiSceneId && !qishiPaused) return;
+    if (qishiStartPending) return;
+    var library = await loadQishiLibrary();
+    var preset = null;
+    if (!newSession && currentQishiSceneId) {
+        preset = library.find(function (item) { return item.id === currentQishiSceneId; }) || null;
+    }
+    if (!preset) {
+        if (newSession) qishiPendingPreset = null;
+        if (!qishiPendingPreset) {
+            var exclude = await rememberedQishiSceneId();
+            qishiPendingPreset = randomQishiPreset(library, exclude);
+        }
+        preset = qishiPendingPreset;
+    }
+    if (!preset) {
+        console.log("栖时场景库不可用（qishi_presets.json 缺失或为空）");
+        return;
+    }
+    var gen = qishiSessionGen;
+    qishiStartPending = true;
+    try {
+        await sendOffscreen({
+            type: "playQishiScene",
+            sceneId: preset.id,
+            tracks: preset.tracks,
+            volume: Number(Vars.UserData.ambientSoundVolume)
+        });
+        if (gen !== qishiSessionGen) return;
+        qishiPendingPreset = null;
+        qishiPaused = false;
+        rememberQishiScene(preset.id);
+    } finally {
+        if (gen === qishiSessionGen) qishiStartPending = false;
+    }
+}
+
+function pauseQishiAmbient() {
+    sendOffscreen({ type: "pauseQishi" }).catch(function (error) {
+        console.log("qishi pause", error);
+    });
+}
+
+function qishiLibrarySize() {
+    return loadQishiLibrary().then(function (library) { return library.length; });
+}
+
+async function playQishiPreview(volume) {
+    var library = await loadQishiLibrary();
+    var preset = randomQishiPreset(library, null);
+    if (!preset) return { error: "栖时场景库不可用" };
+    await sendOffscreen({
+        type: "playQishiPreview",
+        tracks: preset.tracks,
+        volume: Number(volume)
+    });
+    return { id: preset.id, name: preset.name };
+}
+
+function stopQishiPreview() {
+    sendOffscreen({ type: "stopQishiPreview" }).catch(function () {});
+}
+
+function setQishiUserVolume(volume) {
+    if (!isQishiAmbient() || !currentQishiSceneId) return;
+    sendOffscreen({ type: "setQishiVolume", volume: Number(volume) }).catch(function () {});
+}
+
 async function ensureOffscreenDocument() {
     const exists = await chrome.offscreen.hasDocument();
     if (!exists) {
@@ -1333,7 +1489,6 @@ async function ensureOffscreenDocument() {
     }
   }
   
-  // Play a sound
   async function playSound(filename, volume = 1, loop = false) {
     await ensureOffscreenDocument();
     await chrome.runtime.sendMessage({
@@ -1344,13 +1499,16 @@ async function ensureOffscreenDocument() {
     });
   }
   
-  // Stop ambient sound
   async function stopAmbientSound() {
+    qishiSessionGen += 1;
+    currentQishiSceneId = null;
+    qishiPaused = false;
+    qishiPendingPreset = null;
+    qishiStartPending = false;
     await ensureOffscreenDocument();
     await chrome.runtime.sendMessage({ type: "stopAmbientSound" });
   }
   
-  // Play an ambient sample (preview for 3s)
   async function playAmbientSample(filename, volume = 1) {
     await ensureOffscreenDocument();
     await chrome.runtime.sendMessage({
@@ -1360,3 +1518,7 @@ async function ensureOffscreenDocument() {
     });
   }
   //---END Offscreen Sound Manager---
+
+loadQishiLibrary().then(function (library) {
+    Consts.QishiPresetCount = library.length;
+});

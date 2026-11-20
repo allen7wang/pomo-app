@@ -279,6 +279,17 @@ function onPopupPageLoad() {
         runBackgroundFunction("playAmbientSample",[this.value, Vars.UserData.ambientSoundVolume]);
     });
 
+    $('#ambientSource').on('change', function () {
+        syncAmbientSourceUI();
+        updateCredentials();
+        if (this.value !== "qishi") runBackgroundFunction("stopQishiPreview");
+    });
+
+    $('#qishiPreview').on('click', function () {
+        updateCredentials();
+        runBackgroundFunction("playQishiPreview", [$("#ambientSoundVolume").val()]);
+    });
+
     $('#pomodoroEndSoundVolume').mouseup(function () {
         runBackgroundFunction("playSound", [Vars.UserData.pomodoroEndSound, Vars.UserData.pomodoroEndSoundVolume, false]);
     });
@@ -288,7 +299,12 @@ function onPopupPageLoad() {
     });
 
     $('#ambientSoundVolume').mouseup(function () {
-        runBackgroundFunction("playAmbientSample",[Vars.UserData.ambientSound, Vars.UserData.ambientSoundVolume]);
+        if ($("#ambientSource").val() === "qishi") {
+            runBackgroundFunction("setQishiUserVolume", [this.value]);
+            if (!Vars.TimerRunnig) runBackgroundFunction("playQishiPreview", [this.value]);
+        } else {
+            runBackgroundFunction("playAmbientSample",[Vars.UserData.ambientSound, Vars.UserData.ambientSoundVolume]);
+        }
     });
 
     //History Update
@@ -469,6 +485,11 @@ function CredentialFields() {
     $("#pomodoroEndSound").val(Vars.UserData.pomodoroEndSound);
     $("#breakEndSound").val(Vars.UserData.breakEndSound);
     $("#ambientSound").val(Vars.UserData.ambientSound);
+    $("#ambientSource").val(Vars.UserData.ambientSource || "custom");
+    syncAmbientSourceUI();
+    if (Consts.QishiPresetCount) {
+        $("#qishiAmbientNote").text("每个番茄随机播放一个栖时场景混音（共 " + Consts.QishiPresetCount + " 个场景）。暂停后继续同一场景，不与上个番茄重复。");
+    }
     $("#pomodoroEndSoundVolume").val(Vars.UserData.pomodoroEndSoundVolume);
     $("#breakEndSoundVolume").val(Vars.UserData.breakEndSoundVolume);
     $("#ambientSoundVolume").val(Vars.UserData.ambientSoundVolume);
@@ -527,6 +548,7 @@ function CredentialFields() {
     $("#pomodoroEndSound").click(function () { updateCredentials(); });
     $("#breakEndSound").click(function () { updateCredentials(); });
     $("#ambientSound").click(function () { updateCredentials(); });
+    $("#ambientSource").change(function () { updateCredentials(); });
     $("#pomodoroEndSoundVolume").mouseup(function () { updateCredentials(); });
     $("#breakEndSoundVolume").mouseup(function () { updateCredentials(); });
     $("#ambientSoundVolume").mouseup(function () { updateCredentials(); });
@@ -554,6 +576,12 @@ function UpdateBlockCommand() {
         }
         updateTimerDisplay();
     });
+}
+
+function syncAmbientSourceUI() {
+    var qishi = $("#ambientSource").val() === "qishi";
+    $("#qishiAmbientNote, #qishiPreview").toggle(qishi);
+    $("label[for='ambientSound'], #ambientSound").toggle(!qishi);
 }
 
 function SaveUserSettings() {
@@ -642,6 +670,7 @@ function updateCredentials() {
     Vars.UserData.pomodoroEndSound = $("#pomodoroEndSound").val();
     Vars.UserData.breakEndSound = $("#breakEndSound").val();
     Vars.UserData.ambientSound = $("#ambientSound").val();
+    Vars.UserData.ambientSource = $("#ambientSource").val() === "qishi" ? "qishi" : "custom";
     Vars.UserData.pomodoroEndSoundVolume = $("#pomodoroEndSoundVolume").val();
     Vars.UserData.breakEndSoundVolume = $("#breakEndSoundVolume").val();
     Vars.UserData.ambientSoundVolume = $("#ambientSoundVolume").val();

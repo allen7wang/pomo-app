@@ -1055,10 +1055,21 @@ input[type="text"], input[type="number"] {
     width: 25px;
 }
 
-#pomodoroEndSound, #breakEndSound, #ambientSound {
+#pomodoroEndSound, #breakEndSound, #ambientSound, #ambientSource {
     width: 180px;
     margin: 5px 0;
     display: inline;
+}
+
+#qishiPreview {
+    width: 180px;
+    margin: 5px 0;
+    padding: 4px 8px;
+}
+
+#qishiAmbientNote {
+    max-width: 280px;
+    margin: 4px 0;
 }
 
 .lightTextInput {
