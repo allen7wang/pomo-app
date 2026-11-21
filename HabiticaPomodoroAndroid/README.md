@@ -4,6 +4,8 @@ Kotlin + Jetpack Compose 客户端。以 macOS 的可移植业务为基准，不
 
 > **当前版本**为 [3.0.0（versionCode 8）](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-android)，支持任务专注、按任务复盘及 CSV 导出。验收记录见 [三端功能清单](../HabiticaPomodoro/FEATURE_PARITY.md)。
 
+> **从 GitHub v1.2.6 升级**　GitHub 发布的 Android v1.2.6 与 3.0.0 使用不同证书，系统会拒绝覆盖安装。3.0.0 APK 适用于全新安装或签名相同的旧安装。已有本机数据的用户请先保留旧应用并备份。
+
 ## 已实现的功能
 
 - **计时**：绝对结束时刻；开始、暂停/继续、显式放弃、跳到短休息。暂停不算失败；放弃/跳过不增加番茄或 combo。完成一组后保留满组计数，正确进入长休息，结束后清 combo。

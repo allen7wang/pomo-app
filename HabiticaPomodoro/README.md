@@ -138,6 +138,8 @@ bash build_ios.sh --no-install # 仅编译
 
 ## 安装 — Android
 
+> **Android 升级说明**　GitHub 发布的 Android v1.2.6 与 3.0.0 使用不同证书，系统会拒绝覆盖安装。3.0.0 APK 适用于全新安装或签名相同的旧安装。已有本机数据的用户请先保留旧应用并备份。
+
 1. 从 [Android](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-android) 下载 `HabiticaPomodoro-Android-3.0.0.apk`
 2. 传到手机，点击安装（需允许「安装未知来源应用」）
 3. 打开 App → 设置 → 填写 Habitica User ID 与 API Token

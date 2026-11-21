@@ -4,6 +4,8 @@
 
 **Pomo 3.0.0 下载**　[macOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0) · [iOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-ios) · [Android](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-android)
 
+共用 iCloud 数据目录的 Mac 和 iPhone 请一起升级。Android 3.0.0 APK 与 GitHub 发布的 Android v1.2.6 签名不同，旧版用户请先保留原应用及数据。
+
 ## 项目入口
 
 | 模块 | 安装与开发说明 |
