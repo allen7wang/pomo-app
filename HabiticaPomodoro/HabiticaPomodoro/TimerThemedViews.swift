@@ -439,7 +439,7 @@ extension TimerView {
     }
 
     var primarySymbol: String {
-        (engine.isRunning || engine.isFrozen) ? "pause.fill" : "play.fill"
+        (engine.isRunning && !engine.isFrozen) ? "pause.fill" : "play.fill"
     }
 
     func resetTapped() {
@@ -457,7 +457,7 @@ extension TimerView {
                 Text("\(engine.todayPomodoros) 次")
             }
             Text("·").foregroundColor(theme.line)
-            Text("\(engine.todayPomodoros * sideSettings.pomoDurationMins) 分钟")
+            Text("\(engine.todayFocusMinutes) 分钟")
             Text("·").foregroundColor(theme.line)
             Text("第 \(engine.pomoSetCounter + 1) / \(sideSettings.pomoSetNum) 个")
             Spacer(minLength: 0)

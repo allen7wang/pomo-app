@@ -15,8 +15,8 @@ targets:
       path: Generated/Info.plist
       properties:
         CFBundleDisplayName: 今日任务
-        CFBundleShortVersionString: "3.0.0"
-        CFBundleVersion: "20"
+        CFBundleShortVersionString: "3.1.0"
+        CFBundleVersion: "21"
         LSMinimumSystemVersion: "14.0"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension

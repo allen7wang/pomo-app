@@ -72,7 +72,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
         // 初始化 Habitica 任务与今日计数
         Task { await PomodoroEngine.shared.initHabiticaTasks() }
-        PomodoroEngine.shared.loadTodayCount()
+        let engine = PomodoroEngine.shared
+        engine.loadTodayCount()
+        engine.restoreFocusAfterLaunch()
         BlockNotificationManager.shared.startReminderTimer(settings: SettingsManager.shared.settings)
 
         // 锁屏实时活动与主屏小组件：只在外部观察引擎与管理器，共享代码不感知

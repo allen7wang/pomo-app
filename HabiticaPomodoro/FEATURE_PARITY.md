@@ -7,7 +7,7 @@ macOS、iOS、Android 共用业务规则与记录口径，界面采用各端原�
 | 状态 | 范围 |
 |---|---|
 | 发布版本 | 3.0.0 · [macOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0)、[iOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-ios)、[Android](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-android) |
-| 当前源码 | 三端 3.0.0（macOS build 20、iOS build 7、Android versionCode 8）。[任务专注迭代](releases/v3.0.0.md)覆盖任务开番茄、各任务用时与独立 CSV |
+| 当前源码 | macOS 3.1.0（build 21）、iOS 3.1.0（build 8）支持[专注恢复](releases/v3.1.0.md)，Android 为 3.0.0（versionCode 8） |
 | 回归入口 | [Apple fixtures](fixtures/README.md)、[Android fixtures](../HabiticaPomodoroAndroid/fixtures/README.md)、[共享场景](../parity/README.md) |
 | 待设备验收 | Habitica 在线和账号切换、真实音频与锁屏后台、iCloud 跨设备传送、iOS 实际重签和主屏小组件、Android 真机 |
 
@@ -29,6 +29,7 @@ macOS、iOS、Android 共用业务规则与记录口径，界面采用各端原�
 | 统计 | 保存每次完成时的实际专注分钟，不用当前设置反算旧记录；今日、总数/总时长、日均、近期图表、块及植物历史 |
 | 专注复盘 | 7/30/90 个自然日，支持向前翻阅与按天查看块、植物及番茄记录；同一数据导出字节一致，Android 旧版缺失的实际分钟保持未知 |
 | 任务专注 | 今日未完成任务可直接开始番茄；暂停保留任务与时长快照，放弃或跳过清除快照；按完成自然日记录用时，按任务 ID 汇总并支持独立 CSV |
+| 进程恢复 | Apple 在本机恢复进行中或已暂停的专注；冷启动发现已到期时按原自然日补记，历史提醒和 Habitica 请求不重放。Android 继续使用原有计时快照恢复 |
 | 重置与清理 | 重置当前块同时清当前及当天块计数；与清空全部块/植物历史区分；番茄统计单独清理，不意外删 Task；破坏性操作需确认 |
 | 旧数据兼容 | 新设置缺字段时使用默认值，不因为解码失败覆盖旧数据；保留本机离线任务、旧历史和已有植物文件 |
 
