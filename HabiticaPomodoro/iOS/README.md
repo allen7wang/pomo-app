@@ -2,7 +2,9 @@
 
 macOS 版 Habitica Pomodoro 的 iOS 客户端，与 Mac 版共享同一套核心代码（引擎 / 数据 / Habitica API / 视图），通过 `#if os(iOS)` 与跨平台兼容层适配移动端。
 
-> **当前版本**为 [3.0.0（build 7）](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-ios)。IPA 须使用自己的 Apple ID 重签后安装。与 Mac 共用 iCloud 目录时请一起升级。设备验收状态见 [三端功能清单](../FEATURE_PARITY.md)。
+> **当前源码为 3.1.1（build 9）**。本版修复了应用在保存专注历史时退出可能漏记的问题。Mac 与 iPhone 共用 iCloud 目录时应使用相同版本。[更新说明](../releases/v3.1.1.md)
+>
+> GitHub 已发布的 IPA 为 3.0.0（build 7），须用自己的 Apple ID 重签后安装。[下载 IPA](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-ios) · [三端功能清单](../FEATURE_PARITY.md)
 
 ## 数据同步（iCloud Drive 文件）
 

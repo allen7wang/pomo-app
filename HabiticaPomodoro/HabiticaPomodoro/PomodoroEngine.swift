@@ -13,6 +13,8 @@ enum TomatoState { case wait, progress, freeze, breakTime, win, warning }
 
 private struct FocusCheckpoint: Codable {
     let directory: String
+    let focusID: UUID?
+    let completingAt: Date?
     let deadline: Date?
     let secondsRemaining: Int
     let combo: Int
@@ -89,6 +91,10 @@ class PomodoroEngine: ObservableObject {
     }
     private var lastTickAt: Date?
     private var activePomodoroSettings: UserSettings?
+    private var focusID = UUID()
+    private var completingFocusAt: Date?
+    private var savedCompletionMarker = false
+    private var writingFocusHistory = false
     private var focusDirectory: String?
     private var savedFocusURL: URL?
     private var attemptedFocusRestore = false
@@ -183,6 +189,7 @@ class PomodoroEngine: ObservableObject {
                              minutes: configuration.pomoDurationMins,
                              startedAt: Int64(Date().timeIntervalSince1970 * 1000))
         }
+        focusID = taskFocus?.id ?? UUID()
         beginPhase(.pomodoro, duration: configuration.pomoDurationMins * 60, end: focusEndHandler)
         audioManager.playAmbientFor(settings: configuration, newSession: true)
     }
@@ -206,13 +213,13 @@ class PomodoroEngine: ObservableObject {
 
         savedFocusURL = url
         var configuration = phaseSnapshot(checkpoint.settings)
-        let deadline = checkpoint.deadline.map { min($0, now.addingTimeInterval(TimeInterval(checkpoint.secondsRemaining))) }
-        let isExpired = deadline.map { $0 <= now } ?? false
-        if isExpired && !retireActiveFocus() {
-            savedFocusURL = nil
-            focusRecoveryWarning = "暂时无法清除计时恢复记录，请重新打开应用重试"
-            return
+        focusID = checkpoint.task?.id ?? checkpoint.focusID ?? UUID()
+        completingFocusAt = checkpoint.completingAt
+        savedCompletionMarker = checkpoint.completingAt != nil && checkpoint.focusID == focusID
+        let deadline = checkpoint.completingAt ?? checkpoint.deadline.map {
+            min($0, now.addingTimeInterval(TimeInterval(checkpoint.secondsRemaining)))
         }
+        let isExpired = completingFocusAt != nil || deadline.map { $0 <= now } == true
         focusDirectory = checkpoint.directory
         // A cold recovery can settle local history. The previous process may already have
         // delivered its local alert, and unattended time never replays Habitica writes.
@@ -224,7 +231,8 @@ class PomodoroEngine: ObservableObject {
         isRunning = true
         isFrozen = deadline == nil
         phaseDuration = configuration.pomoDurationMins * 60
-        timerValue = deadline.map { max(0, Int(ceil($0.timeIntervalSince(now)))) } ?? checkpoint.secondsRemaining
+        if isExpired { timerValue = 0 }
+        else { timerValue = deadline.map { Int(ceil($0.timeIntervalSince(now))) } ?? checkpoint.secondsRemaining }
         timerString = formatTime(timerValue)
         endHandler = focusEndHandler
         phaseEndsAt = deadline
@@ -233,7 +241,6 @@ class PomodoroEngine: ObservableObject {
         if isExpired {
             catchingUpRestoredFocus = true
             catchUpElapsedPhases(at: now)
-            catchingUpRestoredFocus = false
         } else if let deadline {
             if deadline != checkpoint.deadline { saveFocusCheckpoint(deadline: deadline, secondsRemaining: timerValue) }
             schedulePhaseTimer()
@@ -250,7 +257,8 @@ class PomodoroEngine: ObservableObject {
             focusRecoveryWarning = "暂时无法保存计时恢复记录"
             return true
         }
-        let checkpoint = FocusCheckpoint(directory: directory, deadline: deadline,
+        let checkpoint = FocusCheckpoint(directory: directory, focusID: focusID,
+                                         completingAt: completingFocusAt, deadline: deadline,
                                          secondsRemaining: max(1, secondsRemaining), combo: pomoSetCounter,
                                          task: taskFocus, settings: configuration)
         do {
@@ -266,8 +274,6 @@ class PomodoroEngine: ObservableObject {
         }
     }
 
-    /// Retire the checkpoint before updating history or scoring. Recovery after
-    /// a process exit in the middle of settlement can therefore never repeat it.
     private func retireActiveFocus() -> Bool {
         if let url = savedFocusURL {
             do {
@@ -280,6 +286,8 @@ class PomodoroEngine: ObservableObject {
             }
         }
         savedFocusURL = nil
+        completingFocusAt = nil
+        savedCompletionMarker = false
         focusDirectory = nil
         focusRecoveryWarning = nil
         return true
@@ -290,20 +298,41 @@ class PomodoroEngine: ObservableObject {
         await MainActor.run { self.completePomodoro(at: self.phaseEndsAt ?? Date()) }
     }
 
-    private func completePomodoro(at date: Date) {
-        guard foregroundRecovery == nil, phase == .pomodoro, !isFrozen,
+    private func completePomodoro(at deadline: Date) {
+        guard foregroundRecovery == nil, !writingFocusHistory, phase == .pomodoro, !isFrozen,
               let configuration = activePomodoroSettings else { return }
         guard focusUsesCurrentDirectory else {
-            pauseTimer()
+            if completingFocusAt == nil { pauseTimer() }
+            else { retryFocusSettlement() }
             focusRecoveryWarning = "请切回原数据目录后继续本次专注"
             return
         }
-        guard retireActiveFocus() else { return }
-        let session = taskFocus
+        writingFocusHistory = true
+        defer { writingFocusHistory = false }
+        let date = completingFocusAt ?? deadline
+        completingFocusAt = date
+        audioManager.stopAmbient()
+        // A 3.1.0 unassigned timer acquires its identity here, before history can change.
+        // Persist the terminal date as well so clock rollback cannot restart a settled focus.
+        if !savedCompletionMarker {
+            guard saveFocusCheckpoint(deadline: date, secondsRemaining: 1) else {
+                retryFocusSettlement()
+                return
+            }
+            savedCompletionMarker = savedFocusURL != nil
+        }
+        guard histogramManager.recordFocus(id: focusID, minutes: configuration.pomoDurationMins,
+                                           date: date, taskSession: taskFocus) else {
+            focusRecoveryWarning = "专注历史暂时无法保存，将自动重试"
+            retryFocusSettlement()
+            return
+        }
+        guard retireActiveFocus() else {
+            retryFocusSettlement()
+            return
+        }
         activePomodoroSettings = nil
         stopTimer()
-        audioManager.stopAmbient()
-        histogramManager.incrementToday(pomodoros: 1, minutes: configuration.pomoDurationMins, date: date, taskSession: session)
         loadTodayCount()
         pomoSetCounter += 1
         completedSet = pomoSetCounter >= configuration.pomoSetNum
@@ -363,6 +392,15 @@ class PomodoroEngine: ObservableObject {
                 await BlockRewardManager.shared.sendBlockReward(settings: refreshed, blockIndex: index, blockGoal: rewardGoal, habitId: resolvedPomo)
             }
             await self.refreshHabitica()
+        }
+    }
+
+    private func retryFocusSettlement() {
+        timerValue = 0
+        timerString = formatTime(0)
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { [weak self] _ in
+            self?.catchUpElapsedPhases(at: Date())
         }
     }
 
@@ -451,6 +489,8 @@ class PomodoroEngine: ObservableObject {
     }
 
     func pomodoroInterrupted(breakStreak: Bool) {
+        // Explicitly discarding an unsaved completion must never also score an interruption.
+        if completingFocusAt != nil { reset(); return }
         let interruptedFocus = phase == .pomodoro
         guard interruptedFocus || phase == .breakExtension else { return }
         let sameDirectory = !interruptedFocus || focusUsesCurrentDirectory
@@ -483,10 +523,10 @@ class PomodoroEngine: ObservableObject {
     }
 
     func freeze() {
-        guard isRunning, !isFrozen, phaseEndsAt != nil else { return }
+        guard completingFocusAt == nil, isRunning, !isFrozen, phaseEndsAt != nil else { return }
         let revision = phaseRevision
         tick(at: Date())
-        guard revision == phaseRevision, isRunning, phaseEndsAt != nil else { return }
+        guard revision == phaseRevision, completingFocusAt == nil, isRunning, phaseEndsAt != nil else { return }
         pauseTimer()
     }
 
@@ -519,7 +559,7 @@ class PomodoroEngine: ObservableObject {
     }
 
     func skipToBreak() {
-        guard phase == .pomodoro else { return }
+        guard completingFocusAt == nil, phase == .pomodoro else { return }
         let sameDirectory = focusUsesCurrentDirectory
         guard retireActiveFocus() else { return }
         let skippedConfiguration = activePomodoroSettings ?? phaseSnapshot(settings)
@@ -550,7 +590,9 @@ class PomodoroEngine: ObservableObject {
     }
 
     func reset() {
+        guard !writingFocusHistory else { return }
         if phase == .pomodoro && !retireActiveFocus() { return }
+        catchingUpRestoredFocus = false
         audioManager.stopAmbient()
         stopTimer()
         activePomodoroSettings = nil
@@ -600,6 +642,10 @@ class PomodoroEngine: ObservableObject {
 
     private func tick(at date: Date) {
         guard isRunning, !isFrozen, let deadline = phaseEndsAt else { return }
+        if let completingFocusAt {
+            completePomodoro(at: completingFocusAt)
+            return
+        }
         let raw = Int(ceil(deadline.timeIntervalSince(date)))
         if (lastTickAt.map { date < $0 } ?? false) || raw > phaseDuration {
             // Any observed wall-clock rollback rebases to the already displayed remaining time.
@@ -649,7 +695,8 @@ class PomodoroEngine: ObservableObject {
             if samePhase && !sameDirectory {
                 // Never let the next scheduled tick settle the old folder's elapsed
                 // phase into the new folder. Resume is available in the original folder.
-                self.freeze()
+                if self.completingFocusAt != nil { self.retryFocusSettlement() }
+                else { self.freeze() }
             }
             self.foregroundRecovery = nil
             guard samePhase, sameDirectory else { return }
@@ -659,6 +706,10 @@ class PomodoroEngine: ObservableObject {
 
     /// Catch up elapsed work → break → grace, never invent unattended focus sessions.
     private func catchUpElapsedPhases(at now: Date) {
+        defer {
+            // A failed cold settlement may be retried by a later foreground event or timer.
+            if phase != .pomodoro { catchingUpRestoredFocus = false }
+        }
         for _ in 0..<6 {
             guard isRunning, !isFrozen, let deadline = phaseEndsAt else { break }
             tick(at: now)

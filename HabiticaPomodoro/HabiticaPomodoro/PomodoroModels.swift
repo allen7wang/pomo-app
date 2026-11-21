@@ -387,6 +387,12 @@ struct DayHistogram: Codable, Equatable {
     var minutes: Int
     var weekday: String
     var taskSessions: [TaskFocusSession]? = nil
+    // Task sessions already carry their own completion ID.
+    var unassignedFocusIDs: [UUID]? = nil
+
+    func containsFocus(_ id: UUID) -> Bool {
+        taskSessions?.contains(where: { $0.id == id }) == true || unassignedFocusIDs?.contains(id) == true
+    }
 }
 
 typealias Histogram = [String: DayHistogram]
@@ -452,5 +458,6 @@ extension DayHistogram {
         minutes = try c.decodeIfPresent(Int.self, forKey: .minutes) ?? 0
         weekday = try c.decodeIfPresent(String.self, forKey: .weekday) ?? ""
         taskSessions = try c.decodeIfPresent([TaskFocusSession].self, forKey: .taskSessions)
+        unassignedFocusIDs = try c.decodeIfPresent([UUID].self, forKey: .unassignedFocusIDs)
     }
 }
