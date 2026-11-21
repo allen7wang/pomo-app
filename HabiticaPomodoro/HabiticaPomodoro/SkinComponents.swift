@@ -1,3 +1,4 @@
+import Darwin
 import SwiftUI
 
 // MARK: - Ring timer (smooth / ticks / segmented, per skin tokens)
@@ -184,7 +185,7 @@ private struct TickRingShape: Shape {
         for index in 0..<count where (index < litCount) == lit {
             let length = index % 5 == 0 ? major : minor
             let angle = Double(index) / Double(count) * 2 * .pi - .pi / 2
-            let direction = CGPoint(x: cos(angle), y: sin(angle))
+            let direction = CGPoint(x: CGFloat(Darwin.cos(angle)), y: CGFloat(Darwin.sin(angle)))
             path.move(to: CGPoint(x: center.x + direction.x * radius, y: center.y + direction.y * radius))
             path.addLine(to: CGPoint(x: center.x + direction.x * (radius - length),
                                      y: center.y + direction.y * (radius - length)))
@@ -215,7 +216,9 @@ private struct SegmentRingShape: Shape {
             let start = Double(index) * step - 90 + gap / 2
             let radians = start * .pi / 180
             // addArc would otherwise bridge from the previous block's end, closing the gaps.
-            path.move(to: CGPoint(x: center.x + cos(radians) * radius, y: center.y + sin(radians) * radius))
+            let offsetX = CGFloat(Darwin.cos(radians)) * radius
+            let offsetY = CGFloat(Darwin.sin(radians)) * radius
+            path.move(to: CGPoint(x: center.x + offsetX, y: center.y + offsetY))
             path.addArc(center: center, radius: radius, startAngle: .degrees(start),
                         endAngle: .degrees(start + step - gap), clockwise: false)
         }
