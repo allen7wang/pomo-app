@@ -28,6 +28,7 @@ import com.habitica.pomodoro.data.normalized
 import com.habitica.pomodoro.data.cloudAccount
 import com.habitica.pomodoro.data.isValidHabiticaUid
 import com.habitica.pomodoro.data.TimerBusinessSnapshot
+import com.habitica.pomodoro.data.TaskFocusSession
 import com.habitica.pomodoro.data.HabiticaFeedbackOrder
 import com.habitica.pomodoro.data.HabiticaGate
 import com.habitica.pomodoro.data.HabiticaRequestBudgets
@@ -94,6 +95,7 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         /** 当前番茄激活的栖时场景（ambientSource=="qishi"）。专注开始时随机选出；
          *  暂停/回前台延续同一场景；每个环境音停止点清空。播放由前台服务的 refreshAudio 消费。 */
         val qishiScene: QishiPreset? = null,
+        val taskFocus: TaskFocusSession? = null,
     )
 
     private val store = LocalStore(app)
@@ -225,13 +227,28 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun startPomodoro() {
+        startPomodoro(taskFocus = null)
+    }
+
+    fun startTaskFocus(dateKey: String, category: Int, taskId: String): Boolean {
+        resyncTimer()
+        val state = _state.value
+        if (state.phase == Phase.POMODORO || dateKey != todayKey()) return false
+        val task = state.store.history[dateKey]?.taskGroups?.getOrNull(category)
+            ?.firstOrNull { it.id == taskId && it.isUnfinished } ?: return false
+        startPomodoro(TaskFocusSession(UUID.randomUUID().toString().uppercase(), task.id, task.title,
+            state.settings.pomoDurationMins, System.currentTimeMillis()))
+        return true
+    }
+
+    private fun startPomodoro(taskFocus: TaskFocusSession?) {
         val s = _state.value
         if (s.phase == Phase.POMODORO) return
         customBreak = false
         if (completedSet) _state.value = s.copy(pomoSetCounter = 0)
         completedSet = false
         phaseSnapshot = TimerBusinessSnapshot.capture(s.settings)
-        beginPhase(Phase.POMODORO, s.settings.pomoDurationMins * 60)
+        beginPhase(Phase.POMODORO, s.settings.pomoDurationMins * 60, taskFocus = taskFocus)
         // 栖时模式：每个番茄开始时随机选一个新场景（避开上个番茄）。放在 beginPhase 之后，
         // 因为 beginPhase 会清空 message，"场景库不可用"提示必须随后写入状态。
         selectQishiScene(s.settings)
@@ -262,13 +279,16 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         startBreak() // No completion and no Habitica penalty for skip.
     }
 
-    private fun beginPhase(phase: Phase, seconds: Int, startingAt: Long = System.currentTimeMillis()) {
+    private fun beginPhase(
+        phase: Phase, seconds: Int, startingAt: Long = System.currentTimeMillis(),
+        taskFocus: TaskFocusSession? = null,
+    ) {
         tickJob?.cancel()
         timerSessionId = UUID.randomUUID().toString()
         phaseEndsAt = startingAt + seconds * 1000L
         pausedRemainingSeconds = 0
         _state.value = _state.value.copy(phase = phase, isRunning = true, totalSeconds = seconds,
-            remainingSeconds = seconds, message = null,
+            remainingSeconds = seconds, message = null, taskFocus = taskFocus,
             // 进入非专注阶段（休息/延长）即清空激活场景；POMODORO 由紧随其后的选择逻辑写入
             qishiScene = if (phase == Phase.POMODORO) _state.value.qishiScene else null)
         persistTimer()
@@ -334,7 +354,7 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         if (resetCombo) completedSet = false
         _state.value = _state.value.copy(phase = Phase.IDLE, isRunning = false, remainingSeconds = 0,
             totalSeconds = 0, pomoSetCounter = if (resetCombo) 0 else _state.value.pomoSetCounter,
-            qishiScene = null)
+            qishiScene = null, taskFocus = null)
         persistTimer()
         PomodoroTimerService.stop(getApplication())
     }
@@ -400,6 +420,7 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
             put("totalSeconds", s.totalSeconds); put("combo", s.pomoSetCounter); put("running", s.isRunning)
             put("customBreak", customBreak); put("completedSet", completedSet)
             put("phaseSnapshot", phaseSnapshot?.toJson() ?: org.json.JSONObject.NULL)
+            s.taskFocus?.let { put("taskFocus", it.toJson()) }
         })
     }
     private fun restoreTimer() {
@@ -414,7 +435,8 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         phaseEndsAt = json.optLong("endsAt"); pausedRemainingSeconds = json.optInt("pausedRemaining").coerceAtLeast(0)
         _state.value = _state.value.copy(phase = phase, isRunning = json.optBoolean("running") && phaseEndsAt > 0,
             totalSeconds = json.optInt("totalSeconds").coerceAtLeast(0), remainingSeconds = remainingNow(),
-            pomoSetCounter = json.optInt("combo").coerceAtLeast(0))
+            pomoSetCounter = json.optInt("combo").coerceAtLeast(0),
+            taskFocus = if (phase == Phase.POMODORO) json.optJSONObject("taskFocus")?.let(TaskFocusSession::fromJson) else null)
         // No background FGS launch in Application/boot receivers. Activity resume attaches it.
         resyncTimer()
     }
@@ -439,10 +461,18 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         val day = calendarDayKey(date)
         val old = before.histogram[day] ?: com.habitica.pomodoro.data.DayHistogram()
         // Duration is the completed phase snapshot, NOT the setting at completion.
-        val histogram = before.histogram + (day to old.copy(pomodoros = old.pomodoros + 1,
-            minutes = old.minutes + before.totalSeconds / 60,
-            weekday = java.text.SimpleDateFormat("EEEE", java.util.Locale.getDefault()).format(date)))
-        store.saveHistogram(histogram)
+        val minutes = before.totalSeconds / 60
+        val session = before.taskFocus?.takeIf { minutes > 0 }?.copy(minutes = minutes)
+        val alreadyRecorded = session != null && before.histogram.values.any { entry ->
+            entry.taskSessions.any { it.id == session.id }
+        }
+        val histogram = if (alreadyRecorded) before.histogram else before.histogram + (day to old.copy(
+            pomodoros = old.pomodoros + 1,
+            minutes = old.minutes + minutes,
+            weekday = java.text.SimpleDateFormat("EEEE", java.util.Locale.getDefault()).format(date),
+            taskSessions = if (session == null) old.taskSessions else old.taskSessions + session,
+        ))
+        if (!alreadyRecorded) store.saveHistogram(histogram)
         val combo = before.pomoSetCounter + 1
         val setComplete = combo >= settings.pomoSetNum
         completedSet = setComplete
@@ -457,7 +487,7 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         _state.value = s.copy(histogram = histogram, pomoCounts = histogram.mapValues { it.value.pomodoros },
             todayPomodoros = histogram[calendarDayKey()]?.pomodoros ?: 0, pomoSetCounter = combo,
             phase = if (settings.manualBreak) Phase.MANUAL_BREAK else Phase.IDLE, isRunning = false,
-            remainingSeconds = 0, totalSeconds = 0, message = message, qishiScene = null)
+            remainingSeconds = 0, totalSeconds = 0, message = message, qishiScene = null, taskFocus = null)
         persistTimer()
         PomodoroTimerService.endSignal(getApplication(), if (setComplete) "一组番茄完成" else "番茄结束", message,
             settings.pomoEndSound, settings.pomoEndSoundVolume)

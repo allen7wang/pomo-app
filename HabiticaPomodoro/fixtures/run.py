@@ -43,6 +43,7 @@ SOURCE_NAMES = (
 )
 CASE_HELPERS = {
     "qishi_audio": ("audio_stubs.swift",),
+    "task_focus": ("audio_stubs.swift", "notification_stubs.swift"),
     "foreground_recovery": ("audio_stubs.swift", "notification_stubs.swift", "activation_stubs.swift"),
     "habitica_rate_limit": ("habitica_transport.swift",),
     "habitica_sync_budget": ("habitica_transport.swift",),
@@ -54,7 +55,7 @@ CASE_HELPERS = {
 }
 EXCLUDED_CASES = {Path(helper).stem for helpers in CASE_HELPERS.values() for helper in helpers}
 # Audio and notification fixtures deliberately shadow SDK types in the production module.
-SAME_MODULE_CASES = {"qishi_audio", "foreground_recovery"}
+SAME_MODULE_CASES = {"qishi_audio", "foreground_recovery", "task_focus"}
 SLOW_READ_CASES = {"cold_launch", "file_monitor", "foreground_recovery", "topthree_merge_monitor"}
 
 # A generated top-level preflight must precede every case's manager access.

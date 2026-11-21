@@ -236,7 +236,7 @@ private fun RootTabs(vm: PomodoroViewModel, skins: com.habitica.pomodoro.ui.them
 
         when (selected) {
             0 -> PomoScreen(vm = vm, state = state, modifier = modifier)
-            1 -> TaskScreen(vm = vm, state = state, modifier = modifier)
+            1 -> TaskScreen(vm = vm, state = state, onFocusStarted = { selected = 0 }, modifier = modifier)
             2 -> HabiticaListsScreen(vm = vm, state = state, modifier = modifier)
             3 -> if (reviewOpen) FocusReviewScreen(state = state, onBack = { reviewOpen = false }, modifier = modifier)
                 else HistoryScreen(vm = vm, state = state, modifier = modifier, onOpenReview = { reviewOpen = true })

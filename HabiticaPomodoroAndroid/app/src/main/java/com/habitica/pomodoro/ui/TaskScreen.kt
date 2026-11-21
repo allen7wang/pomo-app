@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
@@ -44,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.habitica.pomodoro.data.isValidHabiticaUid
+import com.habitica.pomodoro.data.isUnfinished
 import com.habitica.pomodoro.engine.PomodoroViewModel
 import com.habitica.pomodoro.engine.PomodoroViewModel.UiState
 import com.habitica.pomodoro.ui.theme.LocalSkin
@@ -73,6 +75,7 @@ private const val PENDING_SYNC = "本机修改待同步"
 fun TaskScreen(
     vm: PomodoroViewModel,
     state: UiState,
+    onFocusStarted: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val store = state.store
@@ -160,6 +163,10 @@ fun TaskScreen(
                         onDelete = { vm.deleteTask(index, taskIndex) },
                         onMove = { },
                         onEdit = { vm.editTask(index, taskIndex, it) },
+                        onFocus = if (!task.isUnfinished) null else {
+                            { if (vm.startTaskFocus(todayKey, index, task.id)) onFocusStarted() }
+                        },
+                        canStartFocus = state.phase != PomodoroViewModel.Phase.POMODORO,
                         syncError = task.syncError ?: if (task.syncPending) PENDING_SYNC else null,
                     )
                 }
@@ -293,6 +300,8 @@ private fun TaskRow(
     onDelete: () -> Unit,
     onMove: () -> Unit,
     onEdit: (String) -> Unit = {},
+    onFocus: (() -> Unit)? = null,
+    canStartFocus: Boolean = false,
     syncError: String? = null,
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -332,6 +341,12 @@ private fun TaskRow(
                 SkinTextButton("移到今天", onClick = onMove, icon = Icons.AutoMirrored.Filled.ArrowForward)
             }
             if (editable) {
+                if (onFocus != null) {
+                    IconButton(onClick = onFocus, enabled = canStartFocus) {
+                        Icon(Icons.Filled.PlayCircle, contentDescription = "专注「$title」",
+                            modifier = Modifier.size(22.dp), tint = if (canStartFocus) c.accent else c.muted)
+                    }
+                }
                 IconButton(onClick = { editing = true }) {
                     Icon(Icons.Filled.Edit, contentDescription = "编辑任务「$title」", modifier = Modifier.size(20.dp), tint = c.muted)
                 }

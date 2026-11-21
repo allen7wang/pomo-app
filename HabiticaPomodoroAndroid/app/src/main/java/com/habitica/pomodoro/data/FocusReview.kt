@@ -29,6 +29,16 @@ data class FocusReviewBlock(
     val wilted: Int,
 )
 
+data class FocusReviewTask(val id: String, val title: String, val pomodoros: Int, val minutes: Int) {
+    companion object {
+        fun summarize(sessions: List<TaskFocusSession>): List<FocusReviewTask> =
+            sessions.groupBy { it.taskId }.map { (id, records) ->
+                val latest = records.maxWith(compareBy<TaskFocusSession> { it.startedAt }.thenBy { it.id })
+                FocusReviewTask(id, latest.title, records.size, records.sumOf { it.minutes })
+            }.sortedWith(compareByDescending<FocusReviewTask> { it.minutes }.thenBy { it.id })
+    }
+}
+
 data class FocusReviewDay(
     val key: String,
     val date: LocalDate,
@@ -37,7 +47,9 @@ data class FocusReviewDay(
     /** Android-only: migrated count-only `pomo_count` days never had minutes. */
     val minutesUnknown: Boolean,
     val blocks: List<FocusReviewBlock>,
+    val taskSessions: List<TaskFocusSession> = emptyList(),
 ) {
+    val tasks: List<FocusReviewTask> get() = FocusReviewTask.summarize(taskSessions)
     val hasRecords: Boolean get() = pomodoros > 0 || minutes > 0 || blocks.isNotEmpty()
     val completedBlocks: Int get() = blocks.count { it.isCompleted }
     val shrubs: Int get() = blocks.sumOf { it.shrubs }
@@ -93,6 +105,7 @@ class FocusReview(
     val startKey: String get() = days.firstOrNull()?.key.orEmpty()
     val endKey: String get() = days.lastOrNull()?.key.orEmpty()
     val hasRecords: Boolean get() = days.any { it.hasRecords }
+    val tasks: List<FocusReviewTask> = FocusReviewTask.summarize(days.flatMap { it.taskSessions })
 
     /** An explicit pick wins while it is in the window; otherwise the most recent day with records. */
     fun selectedDay(selectedKey: String?): FocusReviewDay? =
@@ -116,8 +129,26 @@ class FocusReview(
 
     val csvFilename: String get() = "专注复盘-$startKey-$endKey.csv"
 
+    val taskCsv: String get() {
+        val rows = days.flatMap { day ->
+            day.taskSessions.sortedBy { it.id }.map { session ->
+                "${day.key},${csvCell(session.taskId)},${csvCell(session.title)},${session.minutes}"
+            }
+        }
+        return (listOf("date,task_id,task_title,minutes") + rows).joinToString("\r\n") + "\r\n"
+    }
+
+    val taskCsvFilename: String get() = "任务专注-$startKey-$endKey.csv"
+
     companion object {
         const val CSV_HEADER = "date,pomodoros,minutes,completed_blocks,shrubs,trees,wilted"
+
+        private fun csvCell(value: String): String {
+            val first = value.trimStart().firstOrNull()
+            val formula = first != null && first in "=+-@＝＋－＠"
+            val control = value.firstOrNull()?.let { it in "\t\r\n" } == true
+            return "\"" + (if (formula || control) "'" else "") + value.replace("\"", "\"\"") + "\""
+        }
 
         /** UserSettings supports up to 24 blocks, including blocks from older configurations. */
         private const val MAX_BLOCKS = 24
@@ -156,6 +187,7 @@ class FocusReview(
             minutes = maxOf(0, focus?.minutes ?: 0),
             minutesUnknown = focus?.minutesUnknown == true,
             blocks = blocks(daily, history, plants),
+            taskSessions = focus?.taskSessions.orEmpty(),
         )
 
         private fun blocks(daily: DailyBlockProgress?, history: List<BlockHistoryEntry>, plants: PlantDay?): List<FocusReviewBlock> {

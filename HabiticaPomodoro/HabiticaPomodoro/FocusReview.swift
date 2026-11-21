@@ -19,13 +19,35 @@ struct FocusReviewBlock: Identifiable {
     let wilted: Int
 }
 
+struct FocusReviewTask: Identifiable {
+    let id: UUID
+    let title: String
+    let pomodoros: Int
+    let minutes: Int
+
+    static func summarize(_ sessions: [TaskFocusSession]) -> [Self] {
+        Dictionary(grouping: sessions, by: \.taskId).compactMap { id, records in
+            guard let latest = records.max(by: {
+                ($0.startedAt, $0.id.uuidString) < ($1.startedAt, $1.id.uuidString)
+            }) else { return nil }
+            return Self(id: id, title: latest.title, pomodoros: records.count,
+                        minutes: records.reduce(0) { $0 + $1.minutes })
+        }.sorted {
+            if $0.minutes != $1.minutes { return $0.minutes > $1.minutes }
+            return $0.id.uuidString < $1.id.uuidString
+        }
+    }
+}
+
 struct FocusReviewDay: Identifiable {
     let id: String
     let date: Date
     let pomodoros: Int
     let minutes: Int
     let blocks: [FocusReviewBlock]
+    var taskSessions: [TaskFocusSession] = []
 
+    var tasks: [FocusReviewTask] { FocusReviewTask.summarize(taskSessions) }
     var hasRecords: Bool { pomodoros > 0 || minutes > 0 || !blocks.isEmpty }
     var completedBlocks: Int { blocks.filter(\.isCompleted).count }
     var shrubs: Int { blocks.reduce(0) { $0 + $1.shrubs } }
@@ -74,6 +96,7 @@ struct FocusReview {
     var startKey: String { days.first?.id ?? "" }
     var endKey: String { days.last?.id ?? "" }
     var hasRecords: Bool { days.contains(where: \.hasRecords) }
+    var tasks: [FocusReviewTask] { FocusReviewTask.summarize(days.flatMap(\.taskSessions)) }
 
     init(range: FocusReviewRange, now: Date, histogram: Histogram, dailyBlocks: DailyBlocksHistory,
          blockHistory: BlockHistory, plants: [String: PlantDay], calendar: Calendar = .current) {
@@ -129,6 +152,24 @@ struct FocusReview {
     /// macOS and iOS name the same exported range identically.
     var csvFilename: String { "专注复盘-\(startKey)-\(endKey).csv" }
 
+    var taskCSV: String {
+        let rows = days.flatMap { day in
+            day.taskSessions.sorted { $0.id.uuidString < $1.id.uuidString }.map { session in
+                "\(day.id),\(Self.csvCell(session.taskId.uuidString)),\(Self.csvCell(session.title)),\(session.minutes)"
+            }
+        }
+        return (["date,task_id,task_title,minutes"] + rows).joined(separator: "\r\n") + "\r\n"
+    }
+
+    var taskCSVFilename: String { "任务专注-\(startKey)-\(endKey).csv" }
+
+    private static func csvCell(_ value: String) -> String {
+        let first = value.trimmingCharacters(in: .whitespacesAndNewlines).first
+        let formula = first.map { "=+-@＝＋－＠".contains($0) } == true
+        let control = value.first.map { $0.isNewline || $0 == "\t" } == true
+        return "\"" + (formula || control ? "'" : "") + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+    }
+
     static func dateKeyFormatter(calendar: Calendar) -> DateFormatter {
         let formatter = DateFormatter()
         formatter.calendar = calendar
@@ -140,7 +181,8 @@ struct FocusReview {
     private static func day(key: String, date: Date, focus: DayHistogram?, daily: DailyBlockProgress?,
                             history: [BlockHistoryEntry], plants: PlantDay?) -> FocusReviewDay {
         FocusReviewDay(id: key, date: date, pomodoros: max(0, focus?.pomodoros ?? 0),
-                       minutes: max(0, focus?.minutes ?? 0), blocks: blocks(daily: daily, history: history, plants: plants))
+                       minutes: max(0, focus?.minutes ?? 0), blocks: blocks(daily: daily, history: history, plants: plants),
+                       taskSessions: focus?.taskSessions ?? [])
     }
 
     private static func blocks(daily: DailyBlockProgress?, history: [BlockHistoryEntry],

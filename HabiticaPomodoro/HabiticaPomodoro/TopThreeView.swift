@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 // MARK: - Top Three View
 struct TopThreeView: View {
@@ -6,6 +7,7 @@ struct TopThreeView: View {
     @ObservedObject var settingsManager = SettingsManager.shared
     @Environment(\.appTheme) private var theme
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var phase = PomodoroEngine.shared.phase
 
     private var settings: UserSettings { settingsManager.settings }
     private var todayKey: String { manager.todayKey(settings: settings) }
@@ -16,6 +18,7 @@ struct TopThreeView: View {
             themedContent
         }
         .task { await manager.synchronize(settings: settings) }
+        .onReceive(PomodoroEngine.shared.$phase.removeDuplicates()) { phase = $0 }
         .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { _ in
             manager.objectWillChange.send()
         }
@@ -96,7 +99,7 @@ struct TopThreeView: View {
                 .padding(.bottom, 3)
 
             ForEach(0..<manager.categoryCount, id: \.self) { cat in
-                TopThreeCategorySection(dateKey: key, category: cat, editable: editable)
+                TopThreeCategorySection(dateKey: key, category: cat, editable: editable, canStartFocus: phase != .pomodoro)
                     .themeCard(theme, padding: theme.cardPadding)
             }
         }
@@ -187,6 +190,7 @@ struct TopThreeCategorySection: View {
     let dateKey: String
     let category: Int
     let editable: Bool
+    let canStartFocus: Bool
 
     @State private var editingUUID: UUID? = nil
     @State private var draftTitle: String = ""
@@ -280,6 +284,12 @@ struct TopThreeCategorySection: View {
                         editingUUID = nil
                     },
                     onCancelEdit: { editingUUID = nil },
+                    onFocus: editable && task.isUnfinished ? {
+                        if PomodoroEngine.shared.startPomodoro(taskId: task.id, category: category, dateKey: dateKey) {
+                            AppTabState.shared.selectedTab = 0
+                        }
+                    } : nil,
+                    canStartFocus: canStartFocus,
                     onDelete: editable ? {
                         manager.removeTask(key: dateKey, category: category, id: task.id, settings: settings)
                     } : nil
@@ -344,6 +354,8 @@ struct TaskRow: View {
     let onStartEdit: () -> Void
     let onCommitEdit: () -> Void
     let onCancelEdit: () -> Void
+    let onFocus: (() -> Void)?
+    let canStartFocus: Bool
     let onDelete: (() -> Void)?
 
     var body: some View {
@@ -389,6 +401,20 @@ struct TaskRow: View {
                     .font(.system(size: 11))
                     .foregroundColor(movedColor.opacity(0.7))
                     .help("已移动到今日")
+            }
+
+            if let onFocus, !isEditing {
+                Button(action: onFocus) {
+                    Image(systemName: "play.circle")
+                        .font(.system(size: 17))
+                        .foregroundStyle(canStartFocus ? theme.accent : theme.muted)
+                        .modifier(TaskActionTarget())
+                }
+                .buttonStyle(.borderless)
+                .disabled(!canStartFocus)
+                .help(canStartFocus ? "为这项任务开始番茄" : "请先结束当前番茄")
+                .accessibilityLabel("专注「\(task.title)」")
+                .accessibilityIdentifier("start-task-focus")
             }
 
             // 删除按钮

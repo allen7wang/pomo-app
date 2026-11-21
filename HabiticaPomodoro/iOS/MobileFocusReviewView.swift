@@ -29,17 +29,22 @@ private struct FocusReviewPage: View {
             let calendar = Calendar.current
             let today = calendar.startOfDay(for: timeline.date)
             let review = report(today: today, calendar: calendar)
+            let selected = review.hasRecords ? review.selectedDay(selectedKey) : nil
             ScrollView {
                 VStack(alignment: .leading, spacing: theme.pageSpacing) {
                     ThemedPageHeader(title: "专注复盘", subtitle: "回看每天的番茄、时间块和种植记录。",
                                      symbol: "chart.bar.xaxis")
                     rangeCard(review, today: today, calendar: calendar)
-                    if review.hasRecords, let day = review.selectedDay(selectedKey) {
+                    if let day = selected {
                         trendCard(review, selected: day)
-                        dayList(review, selected: day)
                     } else {
                         ThemedEmptyState(symbol: "chart.bar.xaxis", title: "这段时间还没有专注记录",
                                          message: "所选日期内没有番茄、时间块或种植记录。")
+                    }
+                    TaskFocusBreakdown(tasks: review.tasks, totalPomodoros: review.totals.pomodoros)
+                        .themeCard(theme, padding: theme.cardPadding)
+                    if let day = selected {
+                        dayList(review, selected: day)
                     }
                     exportCard(review)
                 }
@@ -342,6 +347,15 @@ private struct FocusReviewPage: View {
             .buttonStyle(QuietButtonStyle(theme: theme))
             .disabled(review.days.isEmpty)
 
+            if !review.tasks.isEmpty {
+                ShareLink(item: FocusReviewCSVExport(text: review.taskCSV, filename: review.taskCSVFilename),
+                          preview: SharePreview(review.taskCSVFilename)) {
+                    Label("导出任务用时", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(QuietButtonStyle(theme: theme))
+            }
+
             Text("全部历史 · \(histogram.totalPomodoros) 个番茄 · \(String(format: "%.1f", histogram.totalHours)) 小时 · 记录日均 \(String(format: "%.1f", histogram.avgPomodoros)) 个番茄")
                 .font(.system(size: 11))
                 .foregroundColor(theme.muted)
@@ -410,6 +424,10 @@ struct MobileFocusReviewDayView: View {
                         FocusReviewMetric(value: "\(day.completedBlocks)", caption: "达标时间块")
                     }
                     .themeCard(theme, padding: theme.cardPadding)
+                    if !day.taskSessions.isEmpty {
+                        TaskFocusBreakdown(tasks: day.tasks, totalPomodoros: day.pomodoros)
+                            .themeCard(theme, padding: theme.cardPadding)
+                    }
                     blocksCard
                     plantsCard
                 } else {

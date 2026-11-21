@@ -332,6 +332,7 @@ extension TimerView {
     }
 
     var timerCaption: String {
+        if let task = engine.taskFocus { return "\(engine.isFrozen ? "已暂停" : "专注中") · \(task.title)" }
         if engine.isFrozen { return "已暂停 · 随时继续" }
         switch engine.phase {
         case .pomodoro: return "专注中 · 让时间慢慢发生"

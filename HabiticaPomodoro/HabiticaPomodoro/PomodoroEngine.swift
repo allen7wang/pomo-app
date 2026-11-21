@@ -27,6 +27,7 @@ class PomodoroEngine: ObservableObject {
     @Published var habiticaHp: Double = 0
     @Published var habiticaConnected = false
     @Published var lastNotification = ""
+    @Published private(set) var taskFocus: TaskFocusSession?
 
     private var timer: Timer?
     private var phaseRevision = 0
@@ -100,6 +101,21 @@ class PomodoroEngine: ObservableObject {
     }
 
     func startPomodoro() {
+        startPomodoro(task: nil)
+    }
+
+    @discardableResult
+    func startPomodoro(taskId: UUID, category: Int, dateKey: String) -> Bool {
+        guard phase != .pomodoro, foregroundRecovery == nil else { return false }
+        let manager = TopThreeManager.shared
+        guard manager.isEditable(key: dateKey, settings: settings),
+              let task = manager.getTasks(key: dateKey, category: category)
+                .first(where: { $0.id == taskId && $0.isUnfinished }) else { return false }
+        startPomodoro(task: task)
+        return true
+    }
+
+    private func startPomodoro(task: TopThreeTask?) {
         guard phase != .pomodoro else { return }
         #if os(iOS)
         requestNotificationPermissionIfNeeded()
@@ -111,6 +127,11 @@ class PomodoroEngine: ObservableObject {
         activePomodoroSettings = configuration
         activeBreakSettings = nil
         activeBreakExtensionSettings = nil
+        taskFocus = task.map {
+            TaskFocusSession(id: UUID(), taskId: $0.id, title: $0.title,
+                             minutes: configuration.pomoDurationMins,
+                             startedAt: Int64(Date().timeIntervalSince1970 * 1000))
+        }
         beginPhase(.pomodoro, duration: configuration.pomoDurationMins * 60) { [weak self] date in
             self?.completePomodoro(at: date)
         }
@@ -125,10 +146,11 @@ class PomodoroEngine: ObservableObject {
     private func completePomodoro(at date: Date) {
         guard foregroundRecovery == nil, phase == .pomodoro, !isFrozen,
               let configuration = activePomodoroSettings else { return }
+        let session = taskFocus
         activePomodoroSettings = nil
         stopTimer()
         audioManager.stopAmbient()
-        histogramManager.incrementToday(pomodoros: 1, minutes: configuration.pomoDurationMins, date: date)
+        histogramManager.incrementToday(pomodoros: 1, minutes: configuration.pomoDurationMins, date: date, taskSession: session)
         loadTodayCount()
         pomoSetCounter += 1
         completedSet = pomoSetCounter >= configuration.pomoSetNum
@@ -371,6 +393,7 @@ class PomodoroEngine: ObservableObject {
         phaseRevision += 1
         timer?.invalidate()
         timer = nil
+        if next != .pomodoro { taskFocus = nil }
         phase = next
         isRunning = true
         isFrozen = false
@@ -469,6 +492,7 @@ class PomodoroEngine: ObservableObject {
         timer = nil
         phaseEndsAt = nil
         endHandler = nil
+        taskFocus = nil
         lastTickAt = nil
         timerString = "00:00"
         timerValue = 0

@@ -386,9 +386,18 @@ struct DayHistogram: Codable, Equatable {
     var pomodoros: Int
     var minutes: Int
     var weekday: String
+    var taskSessions: [TaskFocusSession]? = nil
 }
 
 typealias Histogram = [String: DayHistogram]
+
+struct TaskFocusSession: Codable, Equatable, Identifiable {
+    let id: UUID
+    let taskId: UUID
+    let title: String
+    let minutes: Int
+    let startedAt: Int64
+}
 
 // Additive schema defaults keep old Mac/iPhone JSON readable.
 extension BlockTimeRange {
@@ -442,5 +451,6 @@ extension DayHistogram {
         pomodoros = try c.decodeIfPresent(Int.self, forKey: .pomodoros) ?? 0
         minutes = try c.decodeIfPresent(Int.self, forKey: .minutes) ?? 0
         weekday = try c.decodeIfPresent(String.self, forKey: .weekday) ?? ""
+        taskSessions = try c.decodeIfPresent([TaskFocusSession].self, forKey: .taskSessions)
     }
 }

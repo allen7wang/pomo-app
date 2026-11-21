@@ -76,6 +76,7 @@ import com.habitica.pomodoro.data.FocusReviewHistorySummary
 import com.habitica.pomodoro.data.FocusReviewNavigation
 import com.habitica.pomodoro.data.FocusReviewPage
 import com.habitica.pomodoro.data.FocusReviewRange
+import com.habitica.pomodoro.data.FocusReviewTask
 import com.habitica.pomodoro.data.focusReviewDuration
 import com.habitica.pomodoro.engine.PomodoroViewModel
 import kotlinx.coroutines.Dispatchers
@@ -143,6 +144,13 @@ fun FocusReviewScreen(state: PomodoroViewModel.UiState, onBack: () -> Unit, modi
             }
         } else {
             item { EmptyState() }
+        }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    TaskFocusBreakdown(review.tasks, review.totals.pomodoros)
+                }
+            }
         }
         item { Footer(review, summary, export) }
     }
@@ -388,11 +396,40 @@ private fun DayDetailCard(day: FocusReviewDay) {
                     Metric("${day.pomodoros}", "完成番茄", Modifier.weight(1f))
                     Metric("${day.completedBlocks}", "达标时间块", Modifier.weight(1f))
                 }
+                if (day.taskSessions.isNotEmpty()) TaskFocusBreakdown(day.tasks, day.pomodoros)
                 BlockDetails(day.blocks)
                 PlantDetails(day)
             } else {
                 Text("当天没有专注、时间块或种植记录。", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TaskFocusBreakdown(tasks: List<FocusReviewTask>, totalPomodoros: Int) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionTitle("任务用时")
+        if (tasks.isEmpty()) {
+            Text("从今日任务开始并完成一个番茄，即可看到任务用时。",
+                style = MaterialTheme.typography.bodySmall, color = muted)
+        } else {
+            Text("${tasks.sumOf { it.pomodoros }} / $totalPomodoros 个番茄关联了任务",
+                style = MaterialTheme.typography.bodySmall, color = muted)
+            for (task in if (expanded) tasks else tasks.take(5)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(task.title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Text("${task.minutes} 分钟 · ${task.pomodoros} 个番茄",
+                        style = MaterialTheme.typography.labelSmall, color = muted)
+                }
+            }
+            if (tasks.size > 5) {
+                TextButton(onClick = { expanded = !expanded }) {
+                    Text(if (expanded) "收起任务" else "查看全部 ${tasks.size} 项任务")
+                }
             }
         }
     }
@@ -497,6 +534,13 @@ private fun Footer(review: FocusReview, summary: FocusReviewHistorySummary, expo
             export.status?.let {
                 Spacer(Modifier.width(12.dp))
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
+        }
+        if (review.tasks.isNotEmpty()) {
+            FilledTonalButton(onClick = { export.status = null; export.launch(review.taskCsv, review.taskCsvFilename) }) {
+                Icon(Icons.Filled.FileDownload, contentDescription = null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("导出任务用时")
             }
         }
         val muted = MaterialTheme.colorScheme.onSurfaceVariant

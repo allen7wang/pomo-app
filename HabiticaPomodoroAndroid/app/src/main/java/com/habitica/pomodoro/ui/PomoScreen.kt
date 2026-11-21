@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.habitica.pomodoro.engine.PomodoroViewModel
@@ -76,6 +77,7 @@ fun PomoScreen(
                 ) {
                     FocusHeading(state)
                     Ring(state, vm, minOf(260.dp, (inner - sp.pageSpacing * 2) / 2))
+                    TaskFocusLabel(state)
                     ControlButtons(state, vm)
                     BreakShortcuts(state, vm)
                 }
@@ -108,6 +110,7 @@ fun PomoScreen(
             ) {
                 FocusHeading(state)
                 Ring(state, vm, minOf(ring, inner))
+                TaskFocusLabel(state)
                 ControlButtons(state, vm)
                 BreakShortcuts(state, vm)
                 StatsCard(state)
@@ -115,6 +118,15 @@ fun PomoScreen(
             }
         }
     }
+}
+
+@Composable
+private fun TaskFocusLabel(state: UiState) {
+    val task = state.taskFocus ?: return
+    val status = if (state.isRunning) "专注中" else "已暂停"
+    Text("$status · ${task.title}", style = MaterialTheme.typography.bodyMedium,
+        color = LocalSkin.current.colors.ink, textAlign = TextAlign.Center, maxLines = 2,
+        overflow = TextOverflow.Ellipsis)
 }
 
 private fun phaseLabel(phase: Phase): String = when (phase) {

@@ -24,8 +24,8 @@ android {
         applicationId = "com.habitica.pomodoro"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.3.0"
+        versionCode = 8
+        versionName = "3.0.0"
     }
 
     signingConfigs {

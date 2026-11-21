@@ -32,6 +32,8 @@ struct FocusReviewView: View {
                         ThemedEmptyState(symbol: "chart.bar.xaxis", title: "这段时间还没有专注记录",
                                          message: "所选日期内没有番茄、时间块或种植记录。")
                     }
+                    TaskFocusBreakdown(tasks: review.tasks, totalPomodoros: review.totals.pomodoros)
+                        .themeCard(theme, padding: theme.cardPadding)
                     footer(review)
                 }
                 .frame(maxWidth: 720)
@@ -50,7 +52,7 @@ struct FocusReviewView: View {
         } message: {
             Text(exportError ?? "")
         }
-        .confirmationDialog("清空所有日期的番茄统计？时间块和种植记录会保留。",
+        .confirmationDialog("清空所有日期的番茄统计和任务用时？时间块和种植记录会保留。",
                             isPresented: $showClearConfirm, titleVisibility: .visible) {
             Button("清空番茄统计", role: .destructive) {
                 histogram.clear()
@@ -267,6 +269,9 @@ struct FocusReviewView: View {
                     metric("\(day.pomodoros)", caption: "完成番茄")
                     metric("\(day.completedBlocks)", caption: "达标时间块")
                 }
+                if !day.taskSessions.isEmpty {
+                    TaskFocusBreakdown(tasks: day.tasks, totalPomodoros: day.pomodoros)
+                }
                 blockDetails(day.blocks)
                 plantDetails(day)
             } else {
@@ -339,6 +344,14 @@ struct FocusReviewView: View {
                 }
                 .disabled(review.days.isEmpty)
                 .accessibilityIdentifier("focus-review-export")
+                if !review.tasks.isEmpty {
+                    Button {
+                        exportDocument = FocusReviewCSV(text: review.taskCSV, filename: review.taskCSVFilename)
+                        showExport = true
+                    } label: {
+                        Label("导出任务用时", systemImage: "square.and.arrow.up")
+                    }
+                }
                 Spacer(minLength: 0)
                 Button("清空番茄统计") { showClearConfirm = true }
                     .foregroundColor(theme.danger)

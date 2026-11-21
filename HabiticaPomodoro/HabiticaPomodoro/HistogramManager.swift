@@ -107,8 +107,20 @@ class HistogramManager: ObservableObject {
             guard local != base else { continue }
             guard let local = local else { merged.removeValue(forKey: date); continue }
             var day = remote[date] ?? DayHistogram(pomodoros: 0, minutes: 0, weekday: local.weekday)
-            day.pomodoros = max(0, day.pomodoros + local.pomodoros - (base?.pomodoros ?? 0))
-            day.minutes = max(0, day.minutes + local.minutes - (base?.minutes ?? 0))
+            let baseIds = Set(base?.taskSessions?.map(\.id) ?? [])
+            var remoteIds = Set(day.taskSessions?.map(\.id) ?? [])
+            var duplicateCount = 0
+            var duplicateMinutes = 0
+            for session in local.taskSessions ?? [] where !baseIds.contains(session.id) {
+                if remoteIds.insert(session.id).inserted {
+                    day.taskSessions = (day.taskSessions ?? []) + [session]
+                } else {
+                    duplicateCount += 1
+                    duplicateMinutes += session.minutes
+                }
+            }
+            day.pomodoros = max(0, day.pomodoros + local.pomodoros - (base?.pomodoros ?? 0) - duplicateCount)
+            day.minutes = max(0, day.minutes + local.minutes - (base?.minutes ?? 0) - duplicateMinutes)
             if day.weekday.isEmpty { day.weekday = local.weekday }
             merged[date] = day
         }
@@ -125,9 +137,14 @@ class HistogramManager: ObservableObject {
         return formatter.string(from: date)
     }
     func getToday() -> DayHistogram? { histogram[todayKey()] }
-    func incrementToday(pomodoros: Int, minutes: Int, date: Date = Date()) {
+    func incrementToday(pomodoros: Int, minutes: Int, date: Date = Date(), taskSession: TaskFocusSession? = nil) {
+        if loadedPath != fileURL.path { reload() }
         let dateKey = todayKey(date: date)
         var day = histogram[dateKey] ?? DayHistogram(pomodoros: 0, minutes: 0, weekday: weekday(date: date))
+        if let taskSession {
+            guard day.taskSessions?.contains(where: { $0.id == taskSession.id }) != true else { return }
+            day.taskSessions = (day.taskSessions ?? []) + [taskSession]
+        }
         day.pomodoros += pomodoros
         day.minutes += minutes
         histogram[dateKey] = day

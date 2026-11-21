@@ -81,7 +81,7 @@ struct MobileHistoryView: View {
         .scrollContentBackground(.hidden)
         .background(theme.pageBackground.ignoresSafeArea())
         .tint(theme.accent)
-        .confirmationDialog("确认清空番茄统计？不删除时间块、植物或 Task。", isPresented: $confirmClear) {
+        .confirmationDialog("清空番茄统计和任务用时？任务、时间块和植物记录会保留。", isPresented: $confirmClear) {
             Button("清空番茄统计", role: .destructive) { histogram.clear() }
         }
         .confirmationDialog("确认清空块与植物历史？不删除番茄统计或 Task。", isPresented: $clearBlocks) {

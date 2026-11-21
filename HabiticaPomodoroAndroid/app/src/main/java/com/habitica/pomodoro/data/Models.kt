@@ -541,9 +541,57 @@ fun UserSettings.normalized(): UserSettings {
     )
 }
 
-data class DayHistogram(val pomodoros: Int = 0, val minutes: Int = 0, val weekday: String = "") {
-    fun toJson() = JSONObject().apply { put("pomodoros", pomodoros); put("minutes", minutes); put("weekday", weekday) }
-    companion object { fun fromJson(j: JSONObject) = DayHistogram(j.optInt("pomodoros").coerceAtLeast(0), j.optInt("minutes").coerceAtLeast(0), j.optString("weekday")) }
+data class TaskFocusSession(
+    val id: String,
+    val taskId: String,
+    val title: String,
+    val minutes: Int,
+    val startedAt: Long,
+) {
+    fun toJson() = JSONObject().apply {
+        put("id", id)
+        put("taskId", taskId)
+        put("title", title)
+        put("minutes", minutes)
+        put("startedAt", startedAt)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): TaskFocusSession? {
+            val id = json.optString("id")
+            val taskId = json.optString("taskId")
+            val title = json.optString("title")
+            val minutes = json.optInt("minutes")
+            if (id.isBlank() || taskId.isBlank() || title.isBlank() || minutes <= 0) return null
+            return TaskFocusSession(id, taskId, title, minutes, json.optLong("startedAt"))
+        }
+    }
+}
+
+data class DayHistogram(
+    val pomodoros: Int = 0,
+    val minutes: Int = 0,
+    val weekday: String = "",
+    val taskSessions: List<TaskFocusSession> = emptyList(),
+) {
+    fun toJson() = JSONObject().apply {
+        put("pomodoros", pomodoros)
+        put("minutes", minutes)
+        put("weekday", weekday)
+        if (taskSessions.isNotEmpty()) put("taskSessions", JSONArray(taskSessions.map { it.toJson() }))
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): DayHistogram {
+            val sessions = json.optJSONArray("taskSessions") ?: JSONArray()
+            return DayHistogram(
+                json.optInt("pomodoros").coerceAtLeast(0),
+                json.optInt("minutes").coerceAtLeast(0),
+                json.optString("weekday"),
+                (0 until sessions.length()).mapNotNull { sessions.optJSONObject(it)?.let(TaskFocusSession::fromJson) },
+            )
+        }
+    }
 }
 
 // MARK: - 栖时场景库（assets audio/qishi_presets.json；字段名与 Apple 端 QishiTrack/QishiPreset 逐字一致）

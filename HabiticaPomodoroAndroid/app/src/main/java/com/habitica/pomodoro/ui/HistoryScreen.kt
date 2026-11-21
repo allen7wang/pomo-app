@@ -140,7 +140,7 @@ fun HistoryScreen(vm: PomodoroViewModel, state: PomodoroViewModel.UiState, modif
         }
     }
     if (confirmHistogram) AlertDialog(onDismissRequest = { confirmHistogram = false }, title = { Text("清空番茄统计？") },
-        text = { Text("只清番茄数与专注分钟，不删除 Task、块进度或植物。不可撤销。") },
+        text = { Text("将清空番茄数、专注分钟和任务用时。任务、时间块和植物记录会保留。") },
         confirmButton = { TextButton(onClick = { vm.clearHistogram(); confirmHistogram = false }) { Text("确认清空", color = c.danger) } },
         dismissButton = { TextButton(onClick = { confirmHistogram = false }) { Text("取消") } })
     // Local Task records are historical snapshots, not fabricated Habitica todos.
