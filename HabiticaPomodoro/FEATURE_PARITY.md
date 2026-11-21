@@ -6,7 +6,7 @@ macOS、iOS、Android 共用业务规则与记录口径，界面采用各端原�
 
 | 状态 | 范围 |
 |---|---|
-| 发布版本 | macOS `v2.1.4`，iOS `v1.2.6-ios`，Android `v1.2.6-android` |
+| 发布版本 | 3.0.0 · [macOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0)、[iOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-ios)、[Android](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-android) |
 | 当前源码 | 三端 3.0.0（macOS build 20、iOS build 7、Android versionCode 8）。[任务专注迭代](releases/v3.0.0.md)覆盖任务开番茄、各任务用时与独立 CSV |
 | 回归入口 | [Apple fixtures](fixtures/README.md)、[Android fixtures](../HabiticaPomodoroAndroid/fixtures/README.md)、[共享场景](../parity/README.md) |
 | 待设备验收 | Habitica 在线和账号切换、真实音频与锁屏后台、iCloud 跨设备传送、iOS 实际重签和主屏小组件、Android 真机 |

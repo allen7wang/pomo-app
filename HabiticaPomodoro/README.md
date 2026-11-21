@@ -16,7 +16,7 @@ macOS / iOS 客户端在本机统一管理各功能的 Habitica 请求额度：�
 
 **Mac ↔ iPhone 数据同步**：Mac 与 iPhone 登录同一 Apple ID 并在 iOS 授权 iCloud Drive 文件夹后，读写 `Documents/.habitica-pomodoro/` 中的七类 JSON 数据文件。系统负责跨设备传送；Top 3 任务文件在保存或采纳其他设备的修改时按任务合并（双方新增都保留，同一字段取较新的修改，删除优先），其余文件同时编辑仍可能最后写入覆盖。Android 无法读取该 iCloud 目录，只经 Habitica todo 导入已上传、带应用日期与分类标记的 Top 3 任务；纯本地任务、设置及历史不通过 Habitica 同步。
 
-> **版本状态**：macOS **[v2.1.4（build 18）](https://github.com/allen7wang/pomo-app/releases/tag/v2.1.4)** 修复并发错误提示、认证响应顺序及切换账号后复用旧读取的问题，并保留之前的上传恢复与列表保护。若 macOS 重新询问访问权限，请为 Habitica Pomodoro 允许「文稿」访问。iOS / Android 的发行版本为 v1.2.6（新增三套可切换皮肤）。
+> **Pomo 3.0.0** 支持从今日任务启动番茄，并在专注复盘查看任务用时。共用 iCloud 数据目录的 Mac 和 iPhone 请一起升级。[macOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0) · [iOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-ios) · [Android](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-android)
 
 当前源码提供七套皮肤，可从调色板或「设置 → 外观」切换，选择保存在本机。配色和形状等设计值由 `design/skins.json` 生成，修改后运行 `python3 design/gen_skins.py` 并用 `--check` 检查两份生成文件。
 
@@ -81,7 +81,7 @@ macOS / iOS 客户端在本机统一管理各功能的 Habitica 请求额度：�
 
 ## 安装 — macOS
 
-1. 从 [Releases](https://github.com/allen7wang/pomo-app/releases) 下载 `HabiticaPomodoro-Installer.dmg`
+1. 从 [macOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0) 下载 `HabiticaPomodoro-3.0.0-Installer.dmg`
 2. 打开 DMG，将应用拖入 Applications
 3. 首次打开如提示无法验证开发者：右键应用 → 打开，或在「系统设置 → 隐私与安全性」中允许
 4. 在 Settings → Habitica 中填入你的 User ID 与 API Token（Habitica 网站 → Settings → API）
@@ -123,9 +123,9 @@ bash build_ios.sh --no-install # 仅编译
 
 ### 方式 B：未签名 .ipa + 第三方重签工具
 
-从 `v1.2.6-ios` Release 下载 `HabiticaPomodoro-iOS-1.2.6-unsigned.ipa`（CI 收集时使用通用名 `HabiticaPomodoro-iOS-unsigned.ipa`），用 [AltStore](https://altstore.io) / [Sideloadly](https://sideloadly.io) 等工具以你自己的 Apple ID 重签后安装。同样受 7 天有效期限制（AltStore 可自动续签）。
+从 [iOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-ios) 下载 `HabiticaPomodoro-iOS-3.0.0-unsigned.ipa`，用自己的 Apple ID 重签后安装。AltStore 或 SideStore 可用于重签和刷新签名。
 
-> 出于隐私考虑，Release 不提供已签名的 .ipa —— 已签名版本内嵌开发者 Team ID 与被授权设备的 UDID，且只能在那一台设备上安装。
+> 下载包仅附 ad-hoc 签名和 App Group 权限声明，安装需要签名工具为自己的账号重新配置。
 
 ### 安装后：连接 iCloud Drive（与 Mac 同步）
 
@@ -138,7 +138,7 @@ bash build_ios.sh --no-install # 仅编译
 
 ## 安装 — Android
 
-1. 从 [Android v1.2.6 Release](https://github.com/allen7wang/pomo-app/releases/tag/v1.2.6-android) 下载 `HabiticaPomodoro-Android-1.2.6.apk`
+1. 从 [Android](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-android) 下载 `HabiticaPomodoro-Android-3.0.0.apk`
 2. 传到手机，点击安装（需允许「安装未知来源应用」）
 3. 打开 App → 设置 → 填写 Habitica User ID 与 API Token
 
@@ -146,7 +146,7 @@ bash build_ios.sh --no-install # 仅编译
 - Android 新版源码的 Task 页可手动刷新 Habitica todo，并在启动、返回前台或更换账号后自动尝试导入 **Mac/iPhone 已上传且备注包含应用专用日期、分类标记** 的任务；通过 Habitica ID 合并标题与完成状态，不覆盖本机离线任务。纯本地任务及其他 Habitica todo 不会被导入；此在线同步尚未使用真实账号端到端验证
 - Android 的设置/历史/植物保存在本机，不能通过 iCloud Drive 与 Mac/iPhone 同步
 - Android 无法访问 iCloud Drive，因此 Mac↔iPhone 的 iCloud 文件同步不适用于 Android（平台限制）
-- Android v1.2.6 已包含时间块/种植、Habits/Dailies、历史及栖时随机场景；真机验收因暂无设备暂缓，不能把发布或离线回归视作这些交互已实测
+- Android 3.0.0 已在模拟器验证任务计时与复盘流程。真机、Habitica 联机与系统后台行为仍待验收。
 
 源码构建：
 

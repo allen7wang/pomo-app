@@ -2,7 +2,7 @@
 
 Kotlin + Jetpack Compose 客户端。以 macOS 的可移植业务为基准，不机械复制桌面布局。
 
-> **发布版本**为 `v1.2.6-android`（versionCode 6），附三套皮肤。当前源码已接入七套皮肤、专注复盘、未完成任务与 Habitica 同步改进，验收记录见 [三端功能清单](../HabiticaPomodoro/FEATURE_PARITY.md)。
+> **当前版本**为 [3.0.0（versionCode 8）](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-android)，支持任务专注、按任务复盘及 CSV 导出。验收记录见 [三端功能清单](../HabiticaPomodoro/FEATURE_PARITY.md)。
 
 ## 已实现的功能
 
