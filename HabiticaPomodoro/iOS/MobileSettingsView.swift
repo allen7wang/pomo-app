@@ -16,10 +16,10 @@ struct MobileSettingsView: View {
             Form {
                 Section {
                     AppearanceStylePicker()
-                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                        .listRowBackground(theme.background)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 4, bottom: 8, trailing: 4))
+                        .listRowBackground(Color.clear)
                 } header: {
-                    Text("外观")
+                    sectionHeader("外观")
                 }
 
                 // Habitica 账号
@@ -37,12 +37,13 @@ struct MobileSettingsView: View {
                                 connecting = false
                             }
                         }.disabled(connecting)
-                        if let error = api.lastError { Text(error).font(.caption).foregroundColor(.orange) }
+                        if let error = api.lastError { Text(error).font(.caption).foregroundColor(theme.danger) }
                         Text("获取方式：Habitica 网站 → Settings → API")
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(theme.muted)
                     }
                 }
+                .listRowBackground(theme.surface)
 
                 // 番茄时长
                 Section("番茄钟") {
@@ -54,6 +55,9 @@ struct MobileSettingsView: View {
                     Toggle("手动开始休息", isOn: $sm.settings.manualBreak)
                     Toggle("休息延长后重置番茄", isOn: $sm.settings.resetPomoAfterBreak)
                 }
+                .listRowBackground(theme.surface)
+
+                LiveActivitySettingsSection()
 
                 // Habitica 计分
                 Section("Habitica 计分") {
@@ -72,7 +76,7 @@ struct MobileSettingsView: View {
                             .textInputAutocapitalization(.never).autocorrectionDisabled()
                     }
                     Text("不使用自定义 ID 时，连接后自动查找或创建 Pomodoro / Pomodoro Combo! 习惯；组合完成会分别执行开启的番茄奖励与组合奖励。")
-                        .font(.caption).foregroundColor(.secondary)
+                        .font(.caption).foregroundColor(theme.muted)
                     Toggle("短休息结束提醒", isOn: $sm.settings.breakExtentionNotify)
                     Toggle("长休息结束提醒", isOn: $sm.settings.longBreakNotify)
                     TextField("自定义 API 服务地址（留空使用默认）", text: $sm.settings.developerServerUrl)
@@ -80,8 +84,9 @@ struct MobileSettingsView: View {
                         .autocorrectionDisabled()
                     Text("自定义服务会收到 User ID 和 API Token；请只使用你信任的 HTTPS 地址。")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(theme.muted)
                 }
+                .listRowBackground(theme.surface)
 
                 // 声音
                 Section("声音") {
@@ -112,7 +117,7 @@ struct MobileSettingsView: View {
                     if sm.settings.ambientSource == "qishi" {
                         Text("每个番茄随机播放一个栖时场景混音（共 \(QishiSceneStore.presets.count) 个场景，从栖时官网流式播放，需联网；暂停恢复自动延续）")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(theme.muted)
                         Slider(value: $sm.settings.ambientSoundVolume, in: 0...1) {
                             Text("环境音量")
                         }
@@ -134,8 +139,9 @@ struct MobileSettingsView: View {
                         Button("预听环境音") { audio.playSound(sm.settings.ambientSound, volume: sm.settings.ambientSoundVolume) }
                         Button("停止预听") { audio.stopPreview() }
                     }
-                    if let error = audio.lastError { Text(error).font(.caption).foregroundColor(.orange) }
+                    if let error = audio.lastError { Text(error).font(.caption).foregroundColor(theme.danger) }
                 }
+                .listRowBackground(theme.surface)
 
                 // 时间块
                 Section("时间块 (Block Mode)") {
@@ -150,21 +156,26 @@ struct MobileSettingsView: View {
                             StepperRow(label: "提前提醒", value: $sm.settings.blockReminderMinutes, range: 1...60, suffix: "分钟")
                         }
                         Text("点击番茄页面的时间块可编辑目标、时间及任务。")
-                            .font(.caption).foregroundColor(.secondary)
+                            .font(.caption).foregroundColor(theme.muted)
                         Button("重置当前时间块进度", role: .destructive) { resetBlockConfirmation = true }
+                            .foregroundColor(theme.danger)
                         Text("仅清当前块计数；历史达标与植物保留。同一天同一块不会重复奖励。")
-                            .font(.caption).foregroundColor(.secondary)
+                            .font(.caption).foregroundColor(theme.muted)
                         Button("清空时间块与植物历史", role: .destructive) { clearBlockConfirmation = true }
+                            .foregroundColor(theme.danger)
                     }
                 }
+                .listRowBackground(theme.surface)
 
                 // 数据
                 ICloudSyncSection()
                 Section("数据清理") {
                     Button("清空番茄统计", role: .destructive) { clearFocusConfirmation = true }
+                        .foregroundColor(theme.danger)
                     Text("专注统计与块/植物历史分开清理，不删除 Task 或设置。")
-                        .font(.caption).foregroundColor(.secondary)
+                        .font(.caption).foregroundColor(theme.muted)
                 }
+                .listRowBackground(theme.surface)
             }
             .navigationTitle("设置")
             .toolbar {
@@ -173,7 +184,7 @@ struct MobileSettingsView: View {
             .toolbarBackground(theme.background, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .scrollContentBackground(.hidden)
-            .background(theme.background)
+            .background(theme.pageBackground.ignoresSafeArea())
             .tint(theme.accent)
             .confirmationDialog("重置当前块计数？", isPresented: $resetBlockConfirmation) {
                 Button("重置", role: .destructive) { BlockProgressManager.shared.resetCurrentBlockProgress(settings: sm.settings) }
@@ -199,6 +210,10 @@ struct MobileSettingsView: View {
         }
     }
 
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title).font(theme.sectionFont(size: 13)).foregroundColor(theme.muted).textCase(nil)
+    }
+
     private func optionalID(_ key: WritableKeyPath<UserSettings, String?>) -> Binding<String> {
         Binding(get: { sm.settings[keyPath: key] ?? "" }, set: { sm.settings[keyPath: key] = $0.isEmpty ? nil : $0 })
     }
@@ -208,6 +223,7 @@ struct MobileSettingsView: View {
 /// 用户一次性授权 iCloud Drive 目录（Files 选择器），App 在其中定位
 /// `.habitica-pomodoro`，与 macOS 端读写同一批 JSON 文件。
 struct ICloudSyncSection: View {
+    @Environment(\.appTheme) private var theme
     @ObservedObject private var grant = ICloudFolderGrant.shared
     @State private var showPicker = false
     @State private var alertMessage: String?
@@ -218,14 +234,14 @@ struct ICloudSyncSection: View {
         Section("iCloud Drive 同步") {
             HStack(spacing: 8) {
                 Image(systemName: grant.isConnected ? "checkmark.icloud.fill" : "icloud.slash")
-                    .foregroundColor(grant.isConnected ? .green : .secondary)
+                    .foregroundColor(grant.isConnected ? theme.accent : theme.muted)
                     .font(.title3)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(grant.isConnected ? "已连接" : "未连接")
                         .font(.subheadline).fontWeight(.medium)
                     Text(grant.statusText)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(theme.muted)
                         .lineLimit(2)
                 }
             }
@@ -234,12 +250,12 @@ struct ICloudSyncSection: View {
                 PomodoroFileChanges.shared.syncFromDiskIfNeeded { saveAllDataAfterSync() }
             }
             Text("文件级最后写入生效；iCloud 系统负责传送文件，在线 Habitica 不会同步本机专注历史。")
-                .font(.caption2).foregroundColor(.secondary)
+                .font(.caption2).foregroundColor(theme.muted)
 
             if grant.isConnected {
                 Button("重新选择文件夹") { showPicker = true }
                 Button("断开连接", role: .destructive) { showRevokeConfirm = true }
-                    .foregroundColor(.red)
+                    .foregroundColor(theme.danger)
             } else {
                 Button("选择 iCloud Drive 文件夹…") { showPicker = true }
             }
@@ -247,27 +263,28 @@ struct ICloudSyncSection: View {
             if grant.isConnected, grant.dataFolderURL != nil {
                 LabeledContent("数据目录") {
                     Text(grant.dataFolderDescription)
-                        .font(.caption).foregroundColor(.secondary)
+                        .font(.caption).foregroundColor(theme.muted)
                         .lineLimit(1).truncationMode(.middle)
                 }
                 if grant.dataFileCount > 0 {
                     Text("✅ 已找到 \(grant.dataFileCount) 个数据文件，与 Mac 版共用同一份数据。")
                         .font(.caption2)
-                        .foregroundColor(.green)
+                        .foregroundColor(theme.accent)
                 } else {
                     Text("⚠️ 该目录下没有数据文件。请确认 Mac 端已运行过应用，且选择的是 iCloud Drive → Documents（不是其他文件夹）。")
                         .font(.caption2)
-                        .foregroundColor(.orange)
+                        .foregroundColor(theme.danger)
                 }
                 Text("提示：`.habitica-pomodoro` 是隐藏文件夹，Files 里看不到也选不了它——只需选择它的父文件夹（iCloud Drive 或 iCloud Drive/Documents 都可以，App 会自动定位）。")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(theme.muted)
             } else {
                 Text("未连接时数据保存在本机沙盒；已配置 Habitica 时，新建的 Task 仍可上传 todo，但本机历史不会因此与 Mac 文件同步。")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(theme.muted)
             }
         }
+        .listRowBackground(theme.surface)
         // 文件夹选择器（iOS 14+），asCopy=false 才能拿到可写的 security-scoped URL
         .fileImporter(isPresented: $showPicker,
                       allowedContentTypes: [.folder],
@@ -328,6 +345,7 @@ struct ICloudSyncSection: View {
 
 // MARK: - Stepper Row
 struct StepperRow: View {
+    @Environment(\.appTheme) private var theme
     let label: String
     @Binding var value: Int
     let range: ClosedRange<Int>
@@ -339,8 +357,8 @@ struct StepperRow: View {
                 Text(label)
                 Spacer()
                 Text("\(value) \(suffix)")
-                    .foregroundColor(.secondary)
-                    .monospacedDigit()
+                    .font(theme.numberFont(size: 15, weight: .regular))
+                    .foregroundColor(theme.muted)
             }
         }
     }

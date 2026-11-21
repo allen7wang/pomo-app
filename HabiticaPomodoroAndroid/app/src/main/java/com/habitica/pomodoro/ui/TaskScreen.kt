@@ -1,6 +1,9 @@
 package com.habitica.pomodoro.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,13 +17,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -34,17 +37,33 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.habitica.pomodoro.data.isValidHabiticaUid
 import com.habitica.pomodoro.engine.PomodoroViewModel
 import com.habitica.pomodoro.engine.PomodoroViewModel.UiState
+import com.habitica.pomodoro.ui.theme.LocalSkin
+import com.habitica.pomodoro.ui.theme.NoticeText
+import com.habitica.pomodoro.ui.theme.PageHeader
+import com.habitica.pomodoro.ui.theme.SkinButton
+import com.habitica.pomodoro.ui.theme.SkinButtonKind
+import com.habitica.pomodoro.ui.theme.SkinCard
+import com.habitica.pomodoro.ui.theme.SkinDivider
+import com.habitica.pomodoro.ui.theme.SkinTextButton
+import com.habitica.pomodoro.ui.theme.SkinTone
+import com.habitica.pomodoro.ui.theme.skinCheckboxColors
+import com.habitica.pomodoro.ui.theme.skinTextFieldColors
+import com.habitica.pomodoro.ui.theme.tabular
 
 /** 前 2 个分类（Work/MyOwn）上限 3 条，其余（Chores）为自由列表 */
 private const val FIXED_SLOT_CATEGORIES = 2
 private const val MAX_FIXED_TASKS = 3
+/** Pending-upload notice; rendered muted, unlike real sync errors. */
+private const val PENDING_SYNC = "本机修改待同步"
 
 /**
  * Task 页：每日三件事 + 琐事。
@@ -61,42 +80,42 @@ fun TaskScreen(
     val yesterdayKey = vm.yesterdayKey()
     var renamingIndex by remember { mutableStateOf<Int?>(null) }
     var renameText by remember { mutableStateOf("") }
+    val skin = LocalSkin.current
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = skin.spacing.pageInset),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Spacer(Modifier.height(8.dp))
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Task", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f))
-            TextButton(onClick = vm::refreshTopThreeFromCloud, enabled = !state.topThreeSyncing &&
-                state.settings.connectHabitica && isValidHabiticaUid(state.settings.uid) && state.settings.apiToken.isNotBlank()) {
-                Text(if (state.topThreeSyncing) "同步中…" else "同步 Habitica")
-            }
+        Spacer(Modifier.height(4.dp))
+        PageHeader("Task", subtitle = "今天可编辑 · 昨天只读（未完成的可以移动到今天）") {
+            SkinTextButton(if (state.topThreeSyncing) "同步中…" else "同步 Habitica", onClick = vm::refreshTopThreeFromCloud,
+                enabled = !state.topThreeSyncing && state.settings.connectHabitica &&
+                    isValidHabiticaUid(state.settings.uid) && state.settings.apiToken.isNotBlank(),
+                icon = Icons.Filled.Sync)
         }
         if (store.history.values.any { day -> day.taskGroups.flatten().any { it.syncPending } } || store.deletedCloudIds.isNotEmpty() || store.deletedCreateMarkers.isNotEmpty()) {
-            TextButton(onClick = vm::retryPendingTasks) { Text("重试待同步操作") }
+            SkinCard(
+                modifier = Modifier.fillMaxWidth(),
+                tone = SkinTone.Subtle,
+                contentPadding = PaddingValues(start = 14.dp, end = 4.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.CloudUpload, contentDescription = null, tint = skin.colors.highlight, modifier = Modifier.size(18.dp))
+                    Text("本机有修改尚未同步", style = MaterialTheme.typography.bodySmall, color = skin.colors.muted,
+                        modifier = Modifier.weight(1f).padding(start = 10.dp))
+                    SkinTextButton("重试待同步操作", onClick = vm::retryPendingTasks)
+                }
+            }
         }
-        state.topThreeSyncError?.let { error ->
-            Text("云端同步失败（本地任务保留）：$error", color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall)
-        }
-        state.persistenceError?.let { error ->
-            Text(error, color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall)
-        }
-        Text(
-            text = "今天可编辑 · 昨天只读（未完成的可以移动到今天）",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(12.dp))
+        state.topThreeSyncError?.let { error -> NoticeText("云端同步失败（本地任务保留）：$error") }
+        state.persistenceError?.let { error -> NoticeText(error) }
+        Spacer(Modifier.height(skin.spacing.rowSpacing))
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(skin.spacing.rowSpacing),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
         ) {
             store.categoryNames.forEachIndexed { index, categoryName ->
@@ -141,7 +160,7 @@ fun TaskScreen(
                         onDelete = { vm.deleteTask(index, taskIndex) },
                         onMove = { },
                         onEdit = { vm.editTask(index, taskIndex, it) },
-                        syncError = task.syncError ?: if (task.syncPending) "本机修改待同步" else null,
+                        syncError = task.syncError ?: if (task.syncPending) PENDING_SYNC else null,
                     )
                 }
 
@@ -183,9 +202,10 @@ fun TaskScreen(
                 }
 
                 item(key = "divider-$index") {
-                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    SkinDivider(modifier = Modifier.padding(top = skin.spacing.rowSpacing, bottom = 4.dp))
                 }
             }
+            item(key = "unfinished") { UnfinishedTasksSection(vm, state) }
         }
     }
 }
@@ -205,8 +225,12 @@ private fun CategoryHeader(
     onCommitRename: () -> Unit,
     onCancelRename: () -> Unit,
 ) {
+    val skin = LocalSkin.current
+    val c = skin.colors
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = if (index == 0) 0.dp else 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (isRenaming) {
@@ -216,23 +240,32 @@ private fun CategoryHeader(
                 modifier = Modifier.weight(1f),
                 singleLine = true,
                 label = { Text("分类名称") },
+                shape = skin.controlShape,
+                colors = skinTextFieldColors(),
             )
-            TextButton(onClick = onCommitRename) { Text("保存") }
-            TextButton(onClick = onCancelRename) { Text("取消") }
+            SkinTextButton("保存", onClick = onCommitRename)
+            SkinTextButton("取消", onClick = onCancelRename, color = c.muted)
         } else {
             Text(
                 text = name,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f),
+                color = c.ink,
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics { heading() },
             )
+            val full = index < FIXED_SLOT_CATEGORIES && todayCount >= MAX_FIXED_TASKS
             Text(
                 text = if (index < FIXED_SLOT_CATEGORIES) "今天 $todayCount/$MAX_FIXED_TASKS" else "今天 $todayCount",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelMedium.tabular(),
+                color = if (full) c.accent else c.muted,
+                modifier = Modifier
+                    .clip(skin.chipShape)
+                    .background(if (full) c.accentSoft else c.subtle)
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
             )
             IconButton(onClick = onStartRename) {
-                Icon(Icons.Filled.Edit, contentDescription = "重命名分类", modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.Edit, contentDescription = "重命名分类「$name」", modifier = Modifier.size(18.dp), tint = c.muted)
             }
         }
     }
@@ -240,13 +273,13 @@ private fun CategoryHeader(
 
 @Composable
 private fun SectionLabel(text: String, muted: Boolean = false) {
+    val c = LocalSkin.current.colors
     Text(
         text = text,
-        style = MaterialTheme.typography.labelMedium,
-        fontSize = 12.sp,
-        color = if (muted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-        else MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+        style = MaterialTheme.typography.labelMedium.tabular(),
+        fontWeight = FontWeight.SemiBold,
+        color = if (muted) c.muted else c.accent,
+        modifier = Modifier.padding(top = 2.dp),
     )
 }
 
@@ -265,51 +298,49 @@ private fun TaskRow(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
     var draft by remember(title) { mutableStateOf(title) }
+    val skin = LocalSkin.current
+    val c = skin.colors
 
-    Card(
+    SkinCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (completed) {
-                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.10f)
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-            },
-        ),
+        tone = if (completed) SkinTone.Accent else SkinTone.Surface,
+        contentPadding = PaddingValues(start = 4.dp, end = 4.dp),
+        elevated = false,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .heightIn(min = 52.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Checkbox(
                 checked = completed,
                 onCheckedChange = { if (editable) onToggle() },
                 enabled = editable,
+                colors = skinCheckboxColors(),
             )
             Text(
                 text = title,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(vertical = 10.dp),
                 style = MaterialTheme.typography.bodyLarge,
                 textDecoration = if (completed) TextDecoration.LineThrough else null,
-                color = if (completed) {
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
+                color = if (completed) c.muted else c.ink,
             )
             if (showMoveButton) {
-                TextButton(onClick = onMove) { Text("➡️ 今天") }
+                SkinTextButton("移到今天", onClick = onMove, icon = Icons.AutoMirrored.Filled.ArrowForward)
             }
             if (editable) {
-                IconButton(onClick = { editing = true }) { Icon(Icons.Filled.Edit, contentDescription = "编辑任务") }
+                IconButton(onClick = { editing = true }) {
+                    Icon(Icons.Filled.Edit, contentDescription = "编辑任务「$title」", modifier = Modifier.size(20.dp), tint = c.muted)
+                }
                 IconButton(onClick = { showDeleteConfirm = true }) {
                     Icon(
                         Icons.Filled.Delete,
-                        contentDescription = "删除",
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.error,
+                        contentDescription = "删除任务「$title」",
+                        modifier = Modifier.size(20.dp),
+                        tint = c.danger,
                     )
                 }
             } else {
@@ -318,9 +349,17 @@ private fun TaskRow(
         }
     }
 
-    syncError?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
+    syncError?.let {
+        Text(
+            it,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (it == PENDING_SYNC) c.muted else c.danger,
+            modifier = Modifier.padding(start = 12.dp, top = 2.dp),
+        )
+    }
     if (editing) androidx.compose.material3.AlertDialog(onDismissRequest = { editing = false }, title = { Text("编辑任务标题") },
-        text = { OutlinedTextField(draft, onValueChange = { draft = it }, label = { Text("任务标题") }, singleLine = true) },
+        text = { OutlinedTextField(draft, onValueChange = { draft = it }, label = { Text("任务标题") }, singleLine = true,
+            shape = skin.controlShape, colors = skinTextFieldColors()) },
         confirmButton = { TextButton(onClick = { onEdit(draft); editing = false }, enabled = draft.isNotBlank()) { Text("保存") } },
         dismissButton = { TextButton(onClick = { editing = false }) { Text("取消") } })
     if (showDeleteConfirm) {
@@ -332,7 +371,7 @@ private fun TaskRow(
                 TextButton(onClick = {
                     showDeleteConfirm = false
                     onDelete()
-                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                }) { Text("删除", color = c.danger) }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
@@ -350,6 +389,7 @@ private fun AddTaskRow(
     onAdd: (String) -> Unit,
 ) {
     var text by remember { mutableStateOf("") }
+    val skin = LocalSkin.current
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -362,7 +402,8 @@ private fun AddTaskRow(
             enabled = enabled && !atLimit,
             placeholder = { Text(hint) },
             singleLine = true,
-            shape = RoundedCornerShape(12.dp),
+            shape = skin.controlShape,
+            colors = skinTextFieldColors(),
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                 imeAction = androidx.compose.ui.text.input.ImeAction.Done,
             ),
@@ -376,12 +417,16 @@ private fun AddTaskRow(
             ),
         )
         Spacer(Modifier.width(8.dp))
-        TextButton(
+        SkinButton(
+            text = "添加",
             onClick = {
                 onAdd(text)
                 text = ""
             },
             enabled = enabled && !atLimit && text.isNotBlank(),
-        ) { Text("添加") }
+            kind = SkinButtonKind.Tonal,
+            icon = Icons.Filled.Add,
+            compact = true,
+        )
     }
 }

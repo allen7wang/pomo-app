@@ -25,13 +25,21 @@ CASES_DIR = FIXTURES_DIR / "cases"
 
 # Keep production dependencies centralized so new cases need no bespoke runner.
 SOURCE_NAMES = (
-    "Managers.swift",
+    "SettingsManager.swift",
+    "PomodoroFileStore.swift",
+    "BlockProgressManager.swift",
+    "TopThreeManager.swift",
+    "HistogramManager.swift",
+    "AudioManager.swift",
+    "PomodoroModels.swift",
+    "HabiticaRequestBudget.swift",
     "HabiticaAPI.swift",
     "PlantJournal.swift",
     "PomodoroEngine.swift",
     "BlockNotificationManager.swift",
     "BlockRewardManager.swift",
     "FocusReview.swift",
+    "TopThreeMerge.swift",
 )
 CASE_HELPERS = {
     "qishi_audio": ("audio_stubs.swift",),
@@ -45,7 +53,9 @@ CASE_HELPERS = {
     "habitica_dispatch_reentry": ("habitica_transport.swift",),
 }
 EXCLUDED_CASES = {Path(helper).stem for helpers in CASE_HELPERS.values() for helper in helpers}
-SLOW_READ_CASES = {"cold_launch", "file_monitor", "foreground_recovery"}
+# Audio and notification fixtures deliberately shadow SDK types in the production module.
+SAME_MODULE_CASES = {"qishi_audio", "foreground_recovery"}
+SLOW_READ_CASES = {"cold_launch", "file_monitor", "foreground_recovery", "topthree_merge_monitor"}
 
 # A generated top-level preflight must precede every case's manager access.
 # The case itself is copied verbatim after this block into build/main.swift.
@@ -94,6 +104,8 @@ do {
     precondition(catalog.resolvingSymlinksInPath().path.hasPrefix(caseRoot.path + "/"), "catalog escaped case root")
     print("SAFETY home=\(home.path) documents=\(documents.path) data=\(data.path) bundle=\(Bundle.main.bundleIdentifier!)")
 }
+// Synthetic reads sleep 1.2 s, so any budget below that still catches a blocked main thread.
+let fixtureMaxMainGap = Double(ProcessInfo.processInfo.environment["POMO_FIXTURE_MAX_MAIN_GAP"] ?? "") ?? 0.3
 
 '''
 
@@ -123,7 +135,7 @@ def safe_work_base(value: str) -> Path:
     return base
 
 
-def child_environment(case_root: Path, run_root: Path, bundle_id: str) -> dict:
+def child_environment(case_root: Path, run_root: Path, bundle_id: str, max_main_gap: float) -> dict:
     env = {
         key: value for key, value in os.environ.items()
         if not key.startswith(("DYLD_", "POMO_"))
@@ -144,6 +156,7 @@ def child_environment(case_root: Path, run_root: Path, bundle_id: str) -> dict:
         POMO_FIXTURE_DATA_ROOT=str(case_root / "fixture"),
         POMO_FIXTURE_REPO_ROOT=str(REPO_ROOT),
         POMO_FIXTURE_BUNDLE_ID=bundle_id,
+        POMO_FIXTURE_MAX_MAIN_GAP=str(max_main_gap),
     )
     return env
 
@@ -239,7 +252,7 @@ def run_case(name: str, run_root: Path, args: argparse.Namespace) -> dict:
             "LSBackgroundOnly": True,
         }, stream)
     result["bundle_id"] = bundle_id
-    env = child_environment(case_root, run_root, bundle_id)
+    env = child_environment(case_root, run_root, bundle_id, args.max_main_gap)
     build = case_root / "build"
     hashes = {}
     sources = []
@@ -249,6 +262,8 @@ def run_case(name: str, run_root: Path, args: argparse.Namespace) -> dict:
             snapshot = build / source_name
             copy_snapshot(SOURCE_DIR / source_name, snapshot, hashes)
             sources.append(str(snapshot))
+        core_sources = list(sources)
+        core_fingerprint = hashlib.sha256("".join(hashes.values()).encode("ascii")).hexdigest()
         # Only this actual JSON is bundled. No mp3s or DEBUG catalog overrides.
         copy_snapshot(SOURCE_DIR / "audio" / "qishi_presets.json", resources / "qishi_presets.json", hashes)
         for helper in CASE_HELPERS.get(name, ()):
@@ -274,7 +289,8 @@ def run_case(name: str, run_root: Path, args: argparse.Namespace) -> dict:
         case_bytes = case.read_bytes()
         hashes[str(case.relative_to(REPO_ROOT))] = hashlib.sha256(case_bytes).hexdigest()
         main = build / "main.swift"
-        main.write_bytes(SWIFT_PREFLIGHT.encode("utf-8") + case_bytes)
+        imports = b"" if name in SAME_MODULE_CASES else b"@testable import PomodoroFixtureCore\n"
+        main.write_bytes(imports + SWIFT_PREFLIGHT.encode("utf-8") + case_bytes)
         sources.append(str(main))
         (case_root / "source-sha256.json").write_text(json.dumps(hashes, indent=2) + "\n", encoding="utf-8")
         if name in SLOW_READ_CASES:
@@ -291,12 +307,30 @@ def run_case(name: str, run_root: Path, args: argparse.Namespace) -> dict:
                 print(stage["output"], end="\n", flush=True)
                 return result
         compile_log = case_root / "compile.log"
-        stage = run_command(
-            ["xcrun", "swiftc", "-D", "DEBUG", "-swift-version", "5", "-g",
-             "-module-cache-path", str(case_root / "module-cache")]
-            + sources + ["-o", str(executable)],
-            case_root, env, compile_log, args.compile_timeout,
-        )
+        compiler = ["xcrun", "swiftc", "-D", "DEBUG", "-swift-version", "5", "-g",
+                    "-whole-module-optimization", "-module-cache-path", str(run_root / "module-cache")]
+        if name not in SAME_MODULE_CASES:
+            core = run_root / "compiled" / core_fingerprint
+            core.mkdir(parents=True, exist_ok=True)
+            module = core / "PomodoroFixtureCore.swiftmodule"
+            object_file = core / "PomodoroFixtureCore.o"
+            if not module.is_file() or not object_file.is_file():
+                stage = run_command(
+                    compiler + ["-parse-as-library", "-enable-testing", "-module-name", "PomodoroFixtureCore",
+                                "-emit-module", "-emit-module-path", str(module), "-emit-object",
+                                "-o", str(object_file)] + core_sources,
+                    case_root, env, core / "compile.log", args.compile_timeout,
+                )
+                if stage["returncode"]:
+                    module.unlink(missing_ok=True)
+                    object_file.unlink(missing_ok=True)
+                    result.update(stage="compile-core", returncode=stage["returncode"], log=str(core / "compile.log"))
+                    print(stage["output"], end="\n", flush=True)
+                    return result
+            compiler += ["-I", str(core)]
+            sources = sources[len(core_sources):] + [str(object_file)]
+        stage = run_command(compiler + sources + ["-o", str(executable)],
+                            case_root, env, compile_log, args.compile_timeout)
         result["compile_seconds"] = round(stage["seconds"], 3)
         if stage["returncode"]:
             result.update(stage="compile", returncode=stage["returncode"], log=str(compile_log))
@@ -331,12 +365,21 @@ def positive_seconds(value: str) -> float:
     return number
 
 
+def main_gap_seconds(value: str) -> float:
+    seconds = positive_seconds(value)
+    if seconds >= 1.2:
+        raise argparse.ArgumentTypeError("must stay below the 1.2 s synthetic read delay")
+    return seconds
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--only", action="append", metavar="CASE", help="run only CASE (repeatable)")
     parser.add_argument("--work", metavar="SCRATCH_BASE", help="parent for a unique, retained run root")
     parser.add_argument("--compile-timeout", type=positive_seconds, default=180.0)
     parser.add_argument("--run-timeout", type=positive_seconds, default=60.0)
+    parser.add_argument("--max-main-gap", type=main_gap_seconds, default=0.3,
+                        help="main run-loop stall budget for native-delay cases (below the 1.2 s synthetic read)")
     args = parser.parse_args()
     try:
         if sys.platform != "darwin":

@@ -36,10 +36,19 @@ runHabiticaFixture {
         }
     }
 
+    func holdRejectedPost() -> DispatchSemaphore {
+        let release = DispatchSemaphore(value: 0)
+        HabiticaFixtureProtocol.respond { request in
+            request.httpMethod == "POST" ? .init(status: 401, heldUntil: release) : .init()
+        }
+        return release
+    }
+
     func waitForPost() async {
-        for _ in 0..<10_000 {
+        let deadline = ProcessInfo.processInfo.systemUptime + 5
+        while ProcessInfo.processInfo.systemUptime < deadline {
             if HabiticaFixtureProtocol.calls.contains(where: { $0.httpMethod == "POST" }) { return }
-            await Task.yield()
+            try? await Task.sleep(nanoseconds: 2_000_000)
         }
         preconditionFailure("expected the delayed create request to start")
     }
@@ -130,12 +139,11 @@ runHabiticaFixture {
     }
 
     let (deleted, removedTask, deletedDay, _) = scenario("removed-during-rejection")
-    HabiticaFixtureProtocol.respond { request in
-        request.httpMethod == "POST" ? .init(status: 401, delay: 0.1) : .init()
-    }
+    let deletionSyncRelease = holdRejectedPost()
     let deletionSync = Task { @MainActor in await manager.synchronize(settings: deleted) }
     await waitForPost()
     manager.removeTask(key: deletedDay, category: 0, id: removedTask.id, settings: deleted)
+    deletionSyncRelease.signal()
     await deletionSync.value
     checkHabitica(manager.getTasks(key: deletedDay, category: 0).isEmpty &&
                   manager.store.deletedCreateAttempts.isEmpty,
@@ -150,9 +158,7 @@ runHabiticaFixture {
                   "a later different task in the same day and category is not blocked by that rejected deletion")
 
     let (oldSettings, original, oldDay, oldOwner) = scenario("owner-a-during-rejection")
-    HabiticaFixtureProtocol.respond { request in
-        request.httpMethod == "POST" ? .init(status: 401, delay: 0.1) : .init()
-    }
+    let oldSyncRelease = holdRejectedPost()
     let oldSync = Task { @MainActor in await manager.synchronize(settings: oldSettings) }
     await waitForPost()
     let originalAttempt = manager.getTasks(key: oldDay, category: 0).first!.cloudCreateAttempt!
@@ -161,6 +167,7 @@ runHabiticaFixture {
     // Even a coincident UUID/payload in another account must remain untouched.
     manager.store.deletedCreateAttempts = [.init(id: original.id, attempt: originalAttempt)]
     manager.save()
+    oldSyncRelease.signal()
     await oldSync.value
     checkHabitica(manager.store.cloudAccount == api.cloudAccount(settings: otherSettings) &&
                   manager.store.deletedCreateAttempts.count == 1 &&
@@ -169,9 +176,7 @@ runHabiticaFixture {
                   "an old-account rejection clears its own row after switching without touching the active owner's intent")
 
     let (deletedOldSettings, deletedOldTask, deletedOldDay, deletedOldOwner) = scenario("deleted-owner-a")
-    HabiticaFixtureProtocol.respond { request in
-        request.httpMethod == "POST" ? .init(status: 401, delay: 0.1) : .init()
-    }
+    let deletedOldSyncRelease = holdRejectedPost()
     let deletedOldSync = Task { @MainActor in await manager.synchronize(settings: deletedOldSettings) }
     await waitForPost()
     let oldAttempt = manager.getTasks(key: deletedOldDay, category: 0).first!.cloudCreateAttempt!
@@ -183,6 +188,7 @@ runHabiticaFixture {
     savedOldState.deletedCreateAttempts.append(unrelated)
     manager.store.cloudStates[deletedOldOwner] = savedOldState
     manager.save()
+    deletedOldSyncRelease.signal()
     await deletedOldSync.value
     manager.reload()
     checkHabitica(manager.store.cloudAccount == api.cloudAccount(settings: newSettings) &&
@@ -190,9 +196,7 @@ runHabiticaFixture {
                   "rejection removes only the matching old-owner UUID/attempt intent and persists unrelated intents")
 
     let (guarded, guardedTask, guardedDay, _) = scenario("changed-attempt")
-    HabiticaFixtureProtocol.respond { request in
-        request.httpMethod == "POST" ? .init(status: 401, delay: 0.1) : .init()
-    }
+    let guardedSyncRelease = holdRejectedPost()
     let guardedSync = Task { @MainActor in await manager.synchronize(settings: guarded) }
     await waitForPost()
     let earlierAttempt = manager.getTasks(key: guardedDay, category: 0).first!.cloudCreateAttempt!
@@ -208,6 +212,7 @@ runHabiticaFixture {
     let changedIntent = DeletedCloudCreateAttempt(id: guardedTask.id, attempt: newerAttempt)
     let otherIntent = DeletedCloudCreateAttempt(id: UUID(), attempt: earlierAttempt)
     manager.store.deletedCreateAttempts = [changedIntent, otherIntent]
+    guardedSyncRelease.signal()
     await guardedSync.value
     let guardedRows = manager.getTasks(key: guardedDay, category: 0)
     checkHabitica(guardedRows[0].cloudCreateAttempt == newerAttempt &&

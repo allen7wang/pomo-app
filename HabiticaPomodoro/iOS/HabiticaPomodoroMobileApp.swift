@@ -9,16 +9,28 @@ struct HabiticaPomodoroMobileApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootTabView()
-                .onAppear {
-                    #if DEBUG
-                    let args = ProcessInfo.processInfo.arguments
-                    if let index = args.firstIndex(of: "-previewTab"), index + 1 < args.count, let tab = Int(args[index + 1]) {
-                        AppTabState.shared.selectedTab = tab
-                    }
-                    #endif
-                }
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-previewWidgets") { WidgetPreviewGallery() } else { root }
+            #else
+            root
+            #endif
         }
+    }
+
+    private var root: some View {
+        RootTabView()
+            .onAppear {
+                #if DEBUG
+                let args = ProcessInfo.processInfo.arguments
+                if let index = args.firstIndex(of: "-previewTab"), index + 1 < args.count, let tab = Int(args[index + 1]) {
+                    AppTabState.shared.selectedTab = tab
+                }
+                if let index = args.firstIndex(of: "-previewSkin"), index + 1 < args.count,
+                   let style = AppUIStyle(rawValue: args[index + 1]) {
+                    UIStyleStore.shared.style = style
+                }
+                #endif
+            }
     }
 }
 
@@ -32,6 +44,19 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         let args = ProcessInfo.processInfo.arguments
         if let index = args.firstIndex(of: "-isolatedDataDirectory"), index + 1 < args.count {
             PomodoroDataDir.isolatedDirectory = URL(fileURLWithPath: args[index + 1])
+        }
+        if args.contains("-captureDevicePreview"), let directory = PomodoroDataDir.debugDirectoryOverride {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                let window = application.connectedScenes
+                    .compactMap { $0 as? UIWindowScene }
+                    .flatMap(\.windows)
+                    .first { $0.isKeyWindow }
+                guard let window, !window.bounds.isEmpty else { return }
+                let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+                    window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+                }
+                try? image.pngData()?.write(to: directory.appendingPathComponent("device-preview.png"), options: .atomic)
+            }
         }
         #endif
         _ = ICloudFolderGrant.shared
@@ -49,6 +74,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         Task { await PomodoroEngine.shared.initHabiticaTasks() }
         PomodoroEngine.shared.loadTodayCount()
         BlockNotificationManager.shared.startReminderTimer(settings: SettingsManager.shared.settings)
+
+        // 锁屏实时活动与主屏小组件：只在外部观察引擎与管理器，共享代码不感知
+        if #available(iOS 16.2, *) { PomodoroLiveActivity.shared.start() }
+        TodayTasksWidgetSync.shared.start()
 
         // 回前台重同步：计时器校正 + 检测 iCloud 是否同步来了 Mac 端的新数据
         NotificationCenter.default.addObserver(
@@ -112,13 +141,14 @@ struct RootTabView: View {
         .environment(\.appTheme, theme)
         .toolbarBackground(theme.surface, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
+        .onAppear { styleStore.applyForcedAppearance() }
     }
 
     private func themedTab<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         NavigationStack {
             content()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(theme.background.ignoresSafeArea())
+                .background(theme.pageBackground.ignoresSafeArea())
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) { SkinPaletteButton() }
                 }

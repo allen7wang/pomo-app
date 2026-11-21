@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Edits the same block goal, schedule and task arrays used by the Mac timeline.
 struct MobileBlockEditorView: View {
+    @Environment(\.appTheme) private var theme
     let blockIndex: Int
     @ObservedObject private var manager = SettingsManager.shared
     @Environment(\.dismiss) private var dismiss
@@ -47,6 +48,7 @@ struct MobileBlockEditorView: View {
                     minutePicker("分", value: timeBinding(\.endMinute, fallback: 0))
                 }
             }
+            .listRowBackground(theme.surface)
             Section("任务 · \(tasks.filter(\.isCompleted).count)/\(tasks.count)") {
                 ForEach(tasks) { task in
                     HStack {
@@ -54,30 +56,40 @@ struct MobileBlockEditorView: View {
                             guard let index = manager.settings.blockTasks[blockIndex].firstIndex(where: { $0.id == task.id }) else { return }
                             manager.settings.blockTasks[blockIndex][index].isCompleted.toggle()
                         } label: {
-                            Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(task.isCompleted ? .green : .secondary)
+                            Image(systemName: theme.checkSymbol(task.isCompleted))
+                                .foregroundColor(task.isCompleted ? theme.accent : theme.muted)
                                 .font(.title3)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(task.isCompleted ? "取消完成" : "完成")
                         TextField("任务标题", text: taskBinding(task.id, \.title, fallback: task.title))
                             .strikethrough(task.isCompleted)
                         Stepper("\(task.estimatedPomo)p", value: taskBinding(task.id, \.estimatedPomo, fallback: 1), in: 1...12)
                             .font(.caption).fixedSize()
                         Button(role: .destructive) {
                             deleteTask = task.id
-                        } label: { Image(systemName: "trash") }
+                        } label: { Image(systemName: "trash").foregroundColor(theme.danger) }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("删除任务")
                     }
                 }
                 HStack {
                     TextField("新任务", text: $newTitle)
                     Stepper("\(newEstimate)p", value: $newEstimate, in: 1...12)
                         .fixedSize()
-                    Button { addTask() } label: { Image(systemName: "plus.circle.fill") }
-                        .disabled(newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button { addTask() } label: {
+                        Image(systemName: theme.squareCorners ? "plus.square.fill" : "plus.circle.fill")
+                            .font(.title3)
+                    }
+                    .disabled(newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .accessibilityLabel("添加任务")
                 }
             }
+            .listRowBackground(theme.surface)
         }
+        .scrollContentBackground(.hidden)
+        .background(theme.pageBackground.ignoresSafeArea())
+        .tint(theme.accent)
         .navigationTitle("B\(blockIndex + 1)")
         .confirmationDialog("删除这条块任务？", isPresented: Binding(get: { deleteTask != nil }, set: { if !$0 { deleteTask = nil } })) {
             Button("删除", role: .destructive) {

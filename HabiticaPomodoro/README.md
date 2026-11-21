@@ -14,9 +14,11 @@ macOS / iOS 客户端在本机统一管理各功能的 Habitica 请求额度：�
 
 基于 [ofekmiz/Habitica-Pomodoro-SiteKeeper](https://github.com/ofekmiz/Habitica-Pomodoro-SiteKeeper) Chrome 扩展的 macOS 原生重制与增强版。
 
-**Mac ↔ iPhone 数据同步**：Mac 与 iPhone 登录同一 Apple ID 并在 iOS 授权 iCloud Drive 文件夹后，读写 `Documents/.habitica-pomodoro/` 中的七类 JSON 数据文件。系统负责跨设备传送，同时编辑仍可能最后写入覆盖。Android 无法读取该 iCloud 目录，只经 Habitica todo 导入已上传、带应用日期与分类标记的 Top 3 任务；纯本地任务、设置及历史不通过 Habitica 同步。
+**Mac ↔ iPhone 数据同步**：Mac 与 iPhone 登录同一 Apple ID 并在 iOS 授权 iCloud Drive 文件夹后，读写 `Documents/.habitica-pomodoro/` 中的七类 JSON 数据文件。系统负责跨设备传送；Top 3 任务文件在保存或采纳其他设备的修改时按任务合并（双方新增都保留，同一字段取较新的修改，删除优先），其余文件同时编辑仍可能最后写入覆盖。Android 无法读取该 iCloud 目录，只经 Habitica todo 导入已上传、带应用日期与分类标记的 Top 3 任务；纯本地任务、设置及历史不通过 Habitica 同步。
 
-> **版本状态**：macOS **[v2.1.4（build 18）](https://github.com/allen7wang/Habitica-Pomodoro-SiteKeeper/releases/tag/v2.1.4)** 修复并发错误提示、认证响应顺序及切换账号后复用旧读取的问题，并保留之前的上传恢复与列表保护。若 macOS 重新询问访问权限，请为 Habitica Pomodoro 允许「文稿」访问。iOS / Android 的发行版本为 v1.2.5。
+> **版本状态**：macOS **[v2.1.4（build 18）](https://github.com/allen7wang/pomo-app/releases/tag/v2.1.4)** 修复并发错误提示、认证响应顺序及切换账号后复用旧读取的问题，并保留之前的上传恢复与列表保护。若 macOS 重新询问访问权限，请为 Habitica Pomodoro 允许「文稿」访问。iOS / Android 的发行版本为 v1.2.6（新增三套可切换皮肤）。
+
+当前源码提供七套皮肤，可从调色板或「设置 → 外观」切换，选择保存在本机。配色和形状等设计值由 `design/skins.json` 生成，修改后运行 `python3 design/gen_skins.py` 并用 `--check` 检查两份生成文件。
 
 ## 功能特性
 
@@ -60,7 +62,7 @@ macOS / iOS 客户端在本机统一管理各功能的 Habitica 请求额度：�
 ### ☁️ 数据存储与同步
 - 所有数据以 JSON 文件存储于 `~/Documents/.habitica-pomodoro/`（隐藏文件夹）
 - Mac 借助 iCloud Drive「桌面与文稿」同步；iPhone 需先在应用内授权同一父目录。无需付费开发者账号，不代表 Android 可以共享该目录
-- Mac/iOS 的 UserDefaults 提供本机兜底备份；文件同步并不保证无冲突，同时在多台设备修改同一文件仍可能按最后写入覆盖
+- Mac/iOS 的 UserDefaults 提供本机兜底备份；Top 3 文件发现其他设备的新版本时，先在后台读取并与本机修改合并再写入，不覆盖对方的修改；其余六类文件在多台设备同时修改时仍可能按最后写入覆盖
 
 ### 📊 统计
 - macOS 主窗口「复盘」（⌘6）可查看连续 7、30、90 天的专注趋势和活跃天数，按窗口向前翻阅，点选日期查看番茄次数、专注时长、已保存的时间块进度与种植记录。
@@ -79,7 +81,7 @@ macOS / iOS 客户端在本机统一管理各功能的 Habitica 请求额度：�
 
 ## 安装 — macOS
 
-1. 从 [Releases](https://github.com/allen7wang/Habitica-Pomodoro-SiteKeeper/releases) 下载 `HabiticaPomodoro-Installer.dmg`
+1. 从 [Releases](https://github.com/allen7wang/pomo-app/releases) 下载 `HabiticaPomodoro-Installer.dmg`
 2. 打开 DMG，将应用拖入 Applications
 3. 首次打开如提示无法验证开发者：右键应用 → 打开，或在「系统设置 → 隐私与安全性」中允许
 4. 在 Settings → Habitica 中填入你的 User ID 与 API Token（Habitica 网站 → Settings → API）
@@ -93,7 +95,7 @@ macOS / iOS 客户端在本机统一管理各功能的 Habitica 请求额度：�
 需要一台装了 Xcode 16+ 的 Mac。已有签名环境时，可连接并解锁 iPhone，在 `HabiticaPomodoro` 目录运行 `bash resign_ios.sh` 重签覆盖安装；该命令会操作所有已连接的实体 iPhone，详情见 [iOS 说明](iOS/README.md)。
 
 ```bash
-git clone https://github.com/allen7wang/Habitica-Pomodoro-SiteKeeper.git
+git clone https://github.com/allen7wang/pomo-app.git
 cd Habitica-Pomodoro-SiteKeeper/HabiticaPomodoro
 brew install xcodegen
 xcodegen generate    # 由 project.yml 生成 Xcode 工程（工程文件不入库）
@@ -121,7 +123,7 @@ bash build_ios.sh --no-install # 仅编译
 
 ### 方式 B：未签名 .ipa + 第三方重签工具
 
-从 `v1.2.5-ios` Release 下载 `HabiticaPomodoro-iOS-1.2.5-unsigned.ipa`（CI 收集时使用通用名 `HabiticaPomodoro-iOS-unsigned.ipa`），用 [AltStore](https://altstore.io) / [Sideloadly](https://sideloadly.io) 等工具以你自己的 Apple ID 重签后安装。同样受 7 天有效期限制（AltStore 可自动续签）。
+从 `v1.2.6-ios` Release 下载 `HabiticaPomodoro-iOS-1.2.6-unsigned.ipa`（CI 收集时使用通用名 `HabiticaPomodoro-iOS-unsigned.ipa`），用 [AltStore](https://altstore.io) / [Sideloadly](https://sideloadly.io) 等工具以你自己的 Apple ID 重签后安装。同样受 7 天有效期限制（AltStore 可自动续签）。
 
 > 出于隐私考虑，Release 不提供已签名的 .ipa —— 已签名版本内嵌开发者 Team ID 与被授权设备的 UDID，且只能在那一台设备上安装。
 
@@ -136,7 +138,7 @@ bash build_ios.sh --no-install # 仅编译
 
 ## 安装 — Android
 
-1. 从 [Android v1.2.5 Release](https://github.com/allen7wang/Habitica-Pomodoro-SiteKeeper/releases/tag/v1.2.5-android) 下载 `HabiticaPomodoro-Android-1.2.5.apk`
+1. 从 [Android v1.2.6 Release](https://github.com/allen7wang/pomo-app/releases/tag/v1.2.6-android) 下载 `HabiticaPomodoro-Android-1.2.6.apk`
 2. 传到手机，点击安装（需允许「安装未知来源应用」）
 3. 打开 App → 设置 → 填写 Habitica User ID 与 API Token
 
@@ -144,12 +146,12 @@ bash build_ios.sh --no-install # 仅编译
 - Android 新版源码的 Task 页可手动刷新 Habitica todo，并在启动、返回前台或更换账号后自动尝试导入 **Mac/iPhone 已上传且备注包含应用专用日期、分类标记** 的任务；通过 Habitica ID 合并标题与完成状态，不覆盖本机离线任务。纯本地任务及其他 Habitica todo 不会被导入；此在线同步尚未使用真实账号端到端验证
 - Android 的设置/历史/植物保存在本机，不能通过 iCloud Drive 与 Mac/iPhone 同步
 - Android 无法访问 iCloud Drive，因此 Mac↔iPhone 的 iCloud 文件同步不适用于 Android（平台限制）
-- Android v1.2.5 已包含时间块/种植、Habits/Dailies、历史及栖时随机场景；真机验收因暂无设备暂缓，不能把发布或离线回归视作这些交互已实测
+- Android v1.2.6 已包含时间块/种植、Habits/Dailies、历史及栖时随机场景；真机验收因暂无设备暂缓，不能把发布或离线回归视作这些交互已实测
 
 源码构建：
 
 ```bash
-git clone https://github.com/allen7wang/Habitica-Pomodoro-SiteKeeper.git
+git clone https://github.com/allen7wang/pomo-app.git
 cd Habitica-Pomodoro-SiteKeeper/HabiticaPomodoroAndroid
 # 需要 JDK 21 + Android SDK（platform-tools / platforms;android-35 / build-tools;35.0.0）
 bash build_android.sh            # debug APK

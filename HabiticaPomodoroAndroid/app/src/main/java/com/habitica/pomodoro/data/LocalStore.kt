@@ -4,10 +4,9 @@ import android.content.Context
 import org.json.JSONObject
 import org.json.JSONArray
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Calendar
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Date
-import java.util.Locale
 
 /**
  * 本地 JSON 文件存储。
@@ -93,22 +92,16 @@ class LocalStore(context: Context) {
      * 一天的开始 = 第一个 time block 的启动时间（默认 04:00）。
      * 例如边界 04:00 时，凌晨 02:00 仍算"昨天"。
      */
-    fun logicalDateKey(settings: UserSettings, date: Date = Date()): String {
+    fun logicalDateKey(settings: UserSettings, date: Date = Date(), zone: ZoneId = ZoneId.systemDefault()): String {
         val boundaryMinutes = settings.blockTimeRanges.firstOrNull()?.startMinutes ?: 0
-        val cal = Calendar.getInstance().apply { time = date }
-        val minuteOfDay = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
-        if (minuteOfDay < boundaryMinutes) {
-            cal.add(Calendar.DAY_OF_YEAR, -1)
-        }
-        return DATE_FORMAT.format(cal.time)
+        val local = date.toInstant().atZone(zone)
+        val minuteOfDay = local.hour * 60 + local.minute
+        val day = local.toLocalDate()
+        return (if (minuteOfDay < boundaryMinutes) day.minusDays(1) else day).toString()
     }
 
-    fun yesterdayKey(settings: UserSettings): String {
-        val cal = Calendar.getInstance()
-        cal.time = DATE_FORMAT.parse(logicalDateKey(settings)) ?: Date()
-        cal.add(Calendar.DAY_OF_YEAR, -1)
-        return DATE_FORMAT.format(cal.time)
-    }
+    fun yesterdayKey(settings: UserSettings): String =
+        LocalDate.parse(logicalDateKey(settings)).minusDays(1).toString()
 
     /** 只有"今天"（逻辑日）的任务可修改 */
     fun isEditable(key: String, settings: UserSettings): Boolean =
@@ -150,6 +143,5 @@ class LocalStore(context: Context) {
         private const val FILE_TOP_THREE = "habitica_pomodoro_top_three.json"
         private const val FILE_POMO_COUNT = "habitica_pomodoro_pomo_count.json"
 
-        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     }
 }

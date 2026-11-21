@@ -37,8 +37,12 @@ object HabiticaAPI {
     /** API 调用结果：成功返回 data 里的 JSON，失败返回错误描述 */
     sealed class Result<out T> {
         data class Success<T>(val value: T) : Result<T>()
-        data class Error(val message: String, val statusCode: Int? = null) : Result<Nothing>()
+        /** [dispatched] = false: the request never left the device (not connected, retired connection, budget). */
+        data class Error(val message: String, val statusCode: Int? = null, val dispatched: Boolean = true) : Result<Nothing>()
     }
+
+    private const val NOT_CONNECTED = "未连接 Habitica：请先在设置中填写 User ID 与 API Token"
+    private const val INVALID_ADDRESS = "API 地址或任务 ID 无效；仅支持不含账号、查询参数的 HTTPS 地址"
 
     private fun Request.Builder.withAuth(settings: UserSettings): Request.Builder = apply {
         header("x-client", X_CLIENT)
@@ -51,35 +55,50 @@ object HabiticaAPI {
 
     // MARK: - 通用请求
 
+    private fun buildRequest(settings: UserSettings, path: String, method: String, body: JSONObject?): Request {
+        val builder = Request.Builder().url(baseUrl(settings) + path).withAuth(settings)
+        when (method) {
+            "GET" -> builder.get()
+            "DELETE" -> builder.delete()
+            else -> builder.method(method, (body?.toString() ?: "{}").toRequestBody(JSON_MEDIA))
+        }
+        return builder.build()
+    }
+
+    /** The only network call site; the gate decides whether it may run (connection epoch, shared budget). */
+    private suspend fun execute(request: Request): HabiticaReply = withContext(Dispatchers.IO) {
+        client.newCall(request).execute().use { resp ->
+            HabiticaReply(resp.code, resp.body?.string().orEmpty(), resp.headers.names().associateWith { resp.headers[it].orEmpty() })
+        }
+    }
+
+    /** Raw exchange through [HabiticaGate]; `epoch` pins multi-request operations to one connection. */
+    private suspend fun send(
+        settings: UserSettings,
+        path: String,
+        method: String = "GET",
+        body: JSONObject? = null,
+        epoch: Long? = null,
+    ): Pair<HabiticaGate.Exchange, String?>? {
+        if (!canCall(settings)) return null
+        val request = try { buildRequest(settings, path, method, body) } catch (e: IllegalArgumentException) {
+            return HabiticaGate.Exchange.NotSent(INVALID_ADDRESS) to null
+        }
+        return HabiticaGate.exchange(settings, method, path, epoch) { execute(request) } to settings.cloudAccount()
+    }
+
     private suspend fun request(
         settings: UserSettings,
         path: String,
         method: String = "GET",
         body: JSONObject? = null,
-    ): Result<JSONObject?> = withContext(Dispatchers.IO) {
-        if (!canCall(settings)) return@withContext Result.Error("未连接 Habitica：请先在设置中填写 User ID 与 API Token")
-        try {
-            val builder = Request.Builder().url(baseUrl(settings) + path).withAuth(settings)
-            when (method) {
-                "GET" -> builder.get()
-                "DELETE" -> builder.delete()
-                else -> builder.method(
-                    method,
-                    (body?.toString() ?: "{}").toRequestBody(JSON_MEDIA),
-                )
-            }
-            client.newCall(builder.build()).execute().use { resp ->
-                val text = resp.body?.string().orEmpty()
-                if (!resp.isSuccessful) {
-                    return@use Result.Error("Habitica 请求失败 (HTTP ${resp.code})", resp.code)
-                }
-                if (method == "DELETE" && text.isBlank()) return@use Result.Success(null)
-                val json = runCatching { JSONObject(text) }.getOrNull() ?: return@use Result.Error("API 返回格式无效")
-                if (json.optBoolean("success", true) == false) return@use Result.Error("API 未确认请求成功")
-                Result.Success(json.optJSONObject("data"))
-            }
-        } catch (e: Exception) {
-            Result.Error(if (e is IllegalArgumentException) "API 地址或任务 ID 无效；仅支持不含账号、查询参数的 HTTPS 地址" else "网络连接失败，请检查网络或服务器")
+        epoch: Long? = null,
+    ): Result<JSONObject?> {
+        val (exchange, account) = send(settings, path, method, body, epoch) ?: return Result.Error(NOT_CONNECTED, dispatched = false)
+        return exchange.toResult(account) { reply ->
+            if (method == "DELETE" && reply.body.isBlank()) return@toResult Result.Success(null)
+            val json = runCatching { JSONObject(reply.body) }.getOrNull() ?: return@toResult Result.Error("API 返回格式无效")
+            if (json.optBoolean("success", true) == false) Result.Error("API 未确认请求成功") else Result.Success(json.optJSONObject("data"))
         }
     }
 
@@ -146,46 +165,25 @@ object HabiticaAPI {
 
     // MARK: - 任务列表（Habits / Dailies）
 
-    /** data 为数组的接口专用（tasks/user?type=...、tags） */
+    /** data 为数组的接口专用（tasks/user?type=todos、tags）；单个条目格式不对时跳过 */
     private suspend fun requestArray(
         settings: UserSettings,
         path: String,
-    ): Result<List<JSONObject>> = withContext(Dispatchers.IO) {
-        if (!canCall(settings)) return@withContext Result.Error("未连接 Habitica：请先在设置中填写 User ID 与 API Token")
-        try {
-            val builder = Request.Builder().url(baseUrl(settings) + path).withAuth(settings).get()
-            client.newCall(builder.build()).execute().use { resp ->
-                val text = resp.body?.string().orEmpty()
-                if (!resp.isSuccessful) {
-                    return@use Result.Error("Habitica 请求失败 (HTTP ${resp.code})", resp.code)
-                }
-                val arr = runCatching { JSONObject(text).optJSONArray("data") }.getOrNull()
-                    ?: return@use Result.Error("Habitica 返回的任务列表格式无效")
-                val list = mutableListOf<JSONObject>()
-                for (i in 0 until arr.length()) arr.optJSONObject(i)?.let { list.add(it) }
-                Result.Success(list)
-            }
-        } catch (e: Exception) {
-            Result.Error(if (e is IllegalArgumentException) "API 地址或任务 ID 无效；仅支持不含账号、查询参数的 HTTPS 地址" else "网络连接失败，请检查网络或服务器")
+        epoch: Long? = null,
+    ): Result<List<JSONObject>> {
+        val (exchange, account) = send(settings, path, epoch = epoch) ?: return Result.Error(NOT_CONNECTED, dispatched = false)
+        return exchange.toResult(account) { reply ->
+            val arr = runCatching { JSONObject(reply.body).optJSONArray("data") }.getOrNull()
+                ?: return@toResult Result.Error("Habitica 返回的任务列表格式无效")
+            Result.Success((0 until arr.length()).mapNotNull { arr.optJSONObject(it) })
         }
     }
 
+    /** Habits/Dailies: malformed lists are failures, never an empty or partial success (see parseHabiticaTaskList). */
     suspend fun fetchTaskItems(settings: UserSettings, type: String): Result<List<HabiticaTaskItem>> {
-        return when (val result = requestArray(settings, "tasks/user?type=$type")) {
-            is Result.Error -> result
-            is Result.Success -> Result.Success(result.value.map { obj ->
-                HabiticaTaskItem(
-                    id = obj.optString("_id", obj.optString("id", "")),
-                    text = obj.optString("text", ""),
-                    notes = obj.optString("notes", ""),
-                    value = obj.optDouble("value", 0.0),
-                    completed = obj.optBoolean("completed", false),
-                    canUp = obj.optBoolean("up", true),
-                    canDown = obj.optBoolean("down", true),
-                    // dailies: isDue 在 JSON 里叫 isDue；habits 无此字段
-                    isDue = obj.optBoolean("isDue", true),
-                )
-            })
+        val (exchange, account) = send(settings, "tasks/user?type=$type") ?: return Result.Error(NOT_CONNECTED, dispatched = false)
+        return exchange.toResult(account) { reply ->
+            parseHabiticaTaskList(type, reply.body)?.let { Result.Success(it) } ?: Result.Error(HabiticaGate.TASK_LIST_MALFORMED)
         }
     }
 
@@ -203,9 +201,12 @@ object HabiticaAPI {
 
     /** Fetch both active todos and the completedTodos endpoint before merging. */
     suspend fun fetchTopThreeTodos(settings: UserSettings): Result<List<CloudTodo>> {
-        val active = requestArray(settings, "tasks/user?type=todos")
+        if (!canCall(settings)) return Result.Error(NOT_CONNECTED, dispatched = false)
+        // Both reads belong to one connection; the second is never sent after a switch.
+        val epoch = HabiticaGate.epochOf(settings) ?: return Result.Error(HabiticaGate.STALE_CONNECTION, dispatched = false)
+        val active = requestArray(settings, "tasks/user?type=todos", epoch)
         if (active is Result.Error) return active
-        val completed = requestArray(settings, "tasks/user?type=completedTodos")
+        val completed = requestArray(settings, "tasks/user?type=completedTodos", epoch)
         if (completed is Result.Error) return completed
         val objects = (active as Result.Success).value + (completed as Result.Success).value
         return Result.Success(objects.mapNotNull { obj ->
@@ -273,8 +274,8 @@ object HabiticaAPI {
     // MARK: - Tags（分类名同步为 Habitica tag）
 
     /** 获取全部 tag：name -> id */
-    suspend fun fetchTags(settings: UserSettings): Result<Map<String, String>> {
-        return when (val result = requestArray(settings, "tags")) {
+    suspend fun fetchTags(settings: UserSettings, epoch: Long? = null): Result<Map<String, String>> {
+        return when (val result = requestArray(settings, "tags", epoch)) {
             is Result.Error -> result
             is Result.Success -> Result.Success(result.value.associate { obj ->
                 obj.optString("name", "") to obj.optString("id", "")
@@ -283,9 +284,9 @@ object HabiticaAPI {
     }
 
     /** 创建 tag，返回 tag id */
-    suspend fun createTag(settings: UserSettings, name: String): Result<String?> {
+    suspend fun createTag(settings: UserSettings, name: String, epoch: Long? = null): Result<String?> {
         val body = JSONObject().apply { put("name", name) }
-        return when (val result = request(settings, "tags", method = "POST", body = body)) {
+        return when (val result = request(settings, "tags", method = "POST", body = body, epoch = epoch)) {
             is Result.Error -> result
             is Result.Success -> Result.Success(result.value?.optString("id", null))
         }
@@ -307,13 +308,14 @@ object HabiticaAPI {
      * 避免重复创建同名 tag。
      */
     suspend fun ensureTag(settings: UserSettings, name: String): Result<String?> {
-        if (!canCall(settings)) return Result.Error("未连接 Habitica")
-        return when (val tags = fetchTags(settings)) {
+        if (!canCall(settings)) return Result.Error("未连接 Habitica", dispatched = false)
+        val epoch = HabiticaGate.epochOf(settings) ?: return Result.Error(HabiticaGate.STALE_CONNECTION, dispatched = false)
+        return when (val tags = fetchTags(settings, epoch)) {
             is Result.Error -> tags
             is Result.Success -> {
                 val existing = tags.value[name]
                 if (existing != null) Result.Success(existing)
-                else createTag(settings, name)
+                else createTag(settings, name, epoch)
             }
         }
     }
@@ -341,7 +343,9 @@ object HabiticaAPI {
             }
         }
         val alias = if (combo) "sitepassPomodoroSet" else "sitepassPomodoro"
-        when (val found = request(settings, "tasks/$alias")) {
+        // The lookup and a possible create must use the same connection.
+        val epoch = HabiticaGate.epochOf(settings) ?: return Result.Error(HabiticaGate.STALE_CONNECTION, dispatched = false)
+        when (val found = request(settings, "tasks/$alias", epoch = epoch)) {
             is Result.Success -> return found.value?.optString("_id", found.value.optString("id"))?.takeIf { it.isNotBlank() }?.let { Result.Success(it) } ?: Result.Error("默认 Habit 返回格式无效")
             is Result.Error -> if (found.statusCode != 404) return found // Never create on timeout/auth/server failure.
         }
@@ -350,7 +354,7 @@ object HabiticaAPI {
             put("notes", "Habit utilized by Habitica SiteKeeper. Change the difficulty manually according to your needs.")
             put("priority", if (combo) 1.5 else 1.0); put("up", true); put("down", true)
         }
-        return when (val created = request(settings, "tasks/user", "POST", body)) {
+        return when (val created = request(settings, "tasks/user", "POST", body, epoch)) {
             is Result.Error -> created
             is Result.Success -> created.value?.optString("_id", created.value.optString("id"))?.takeIf { it.isNotBlank() }?.let { Result.Success(it) } ?: Result.Error("默认 Habit 创建结果无效")
         }

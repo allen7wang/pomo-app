@@ -1,0 +1,126 @@
+{
+  "version": 2,
+  "notes": "Single source of truth for Mac/iOS/Android skins. Edit here, then run `python3 design/gen_skins.py` to regenerate SkinTokens.swift and SkinTokens.kt. Colors are 0xRRGGBB sRGB.",
+  "layouts": {
+    "compact": { "pageInset": 22, "pageSpacing": 14, "cardPadding": 14, "rowSpacing": 8, "macWindow": [470, 820] },
+    "airy":    { "pageInset": 26, "pageSpacing": 18, "cardPadding": 18, "rowSpacing": 10, "macWindow": [470, 820] },
+    "columns": { "pageInset": 20, "pageSpacing": 12, "cardPadding": 12, "rowSpacing": 7, "macWindow": [820, 540] }
+  },
+  "skins": [
+    {
+      "id": "mint", "title": "清新原生", "tagline": "紧凑、有序，日常好用", "symbol": "leaf",
+      "layout": "compact", "forcedScheme": null,
+      "shape": { "cardRadius": 14, "controlRadius": 11, "borderWidth": 1, "cardBorder": "line", "shadow": "soft" },
+      "type": { "titleDesign": "default", "titleWeight": "semibold", "timerDesign": "rounded", "timerWeight": "light" },
+      "ring": { "style": "smooth", "width": 6, "knob": true, "glow": false },
+      "light": { "background": "F7FAF6", "backgroundAlt": "EDF4EC", "surface": "FFFFFF", "subtle": "EEF4EC", "line": "D9E4D6",
+                 "ink": "1F3329", "muted": "56675C", "accent": "2A6E52", "accentSoft": "E1EEE3", "onAccent": "FFFFFF",
+                 "rest": "2F6F98", "restSoft": "E2EDF5", "danger": "B0412C", "highlight": "8F6410" },
+      "dark":  { "background": "0F1813", "backgroundAlt": "13201A", "surface": "18251E", "subtle": "1F3027", "line": "2F4538",
+                 "ink": "EAF2EC", "muted": "A9BDB0", "accent": "8FD3AE", "accentSoft": "21392C", "onAccent": "0E2318",
+                 "rest": "8EC3E6", "restSoft": "1C3040", "danger": "F08C78", "highlight": "E8C26A" }
+    },
+    {
+      "id": "garden", "title": "留白花园", "tagline": "安静、舒展，专注优先", "symbol": "camera.macro",
+      "layout": "airy", "forcedScheme": null,
+      "shape": { "cardRadius": 20, "controlRadius": 14, "borderWidth": 0, "cardBorder": "none", "shadow": "none" },
+      "type": { "titleDesign": "serif", "titleWeight": "regular", "timerDesign": "serif", "timerWeight": "light" },
+      "ring": { "style": "ticks", "width": 2, "knob": false, "glow": false },
+      "light": { "background": "F6F3EA", "backgroundAlt": "EFEBDF", "surface": "FBF9F3", "subtle": "EFEBE0", "line": "DDD6C4",
+                 "ink": "33362A", "muted": "646452", "accent": "56663A", "accentSoft": "E7E8D6", "onAccent": "FFFFFF",
+                 "rest": "6F5F84", "restSoft": "ECE6F0", "danger": "A0442B", "highlight": "8A5F17" },
+      "dark":  { "background": "171812", "backgroundAlt": "1C1D16", "surface": "212219", "subtle": "2A2B20", "line": "3D3E30",
+                 "ink": "EEEBDD", "muted": "B9B6A2", "accent": "C3CF9A", "accentSoft": "33381F", "onAccent": "1B2010",
+                 "rest": "C7B6DA", "restSoft": "2E2836", "danger": "E79A80", "highlight": "DDBB72" }
+    },
+    {
+      "id": "studio", "title": "效率工作台", "tagline": "专注与任务并排", "symbol": "rectangle.split.2x1",
+      "layout": "columns", "forcedScheme": null,
+      "shape": { "cardRadius": 8, "controlRadius": 6, "borderWidth": 1, "cardBorder": "line", "shadow": "none" },
+      "type": { "titleDesign": "default", "titleWeight": "semibold", "timerDesign": "monospaced", "timerWeight": "regular" },
+      "ring": { "style": "smooth", "width": 4, "knob": false, "glow": false },
+      "light": { "background": "F5F7F9", "backgroundAlt": "ECF0F4", "surface": "FFFFFF", "subtle": "EEF2F5", "line": "D8DFE6",
+                 "ink": "1B2631", "muted": "526070", "accent": "1D6A8A", "accentSoft": "E0EDF3", "onAccent": "FFFFFF",
+                 "rest": "9A5A0C", "restSoft": "F7ECDD", "danger": "B3363A", "highlight": "6B4FB0" },
+      "dark":  { "background": "0E1318", "backgroundAlt": "121920", "surface": "161E26", "subtle": "1C2631", "line": "2A3744",
+                 "ink": "E6EDF3", "muted": "9DABB8", "accent": "7CC4E2", "accentSoft": "1A3442", "onAccent": "08202B",
+                 "rest": "F0B565", "restSoft": "3A2C17", "danger": "F28B82", "highlight": "B9A6FF" }
+    },
+    {
+      "id": "tomato", "title": "番茄经典", "tagline": "温暖、饱满，回到番茄钟本色", "symbol": "timer",
+      "layout": "compact", "forcedScheme": null,
+      "shape": { "cardRadius": 18, "controlRadius": 14, "borderWidth": 0, "cardBorder": "none", "shadow": "lifted" },
+      "type": { "titleDesign": "rounded", "titleWeight": "bold", "timerDesign": "rounded", "timerWeight": "semibold" },
+      "ring": { "style": "smooth", "width": 12, "knob": true, "glow": false },
+      "light": { "background": "FFF8F1", "backgroundAlt": "FCEEE2", "surface": "FFFFFF", "subtle": "FBEFE5", "line": "F0DCCB",
+                 "ink": "3A1F17", "muted": "73554A", "accent": "C23D2B", "accentSoft": "FDEBE5", "onAccent": "FFFFFF",
+                 "rest": "2D774A", "restSoft": "E1F0E5", "danger": "8E2418", "highlight": "9A6410" },
+      "dark":  { "background": "1A1210", "backgroundAlt": "211714", "surface": "261A16", "subtle": "2F211C", "line": "46302A",
+                 "ink": "F7E9E2", "muted": "C9AEA4", "accent": "FF7A63", "accentSoft": "4A221B", "onAccent": "2A0C06",
+                 "rest": "7FCF9A", "restSoft": "1D3527", "danger": "FF9E8F", "highlight": "F3C266" }
+    },
+    {
+      "id": "midnight", "title": "深夜航行", "tagline": "深色、低光，夜里也不刺眼", "symbol": "moon.stars",
+      "layout": "airy", "forcedScheme": "dark",
+      "shape": { "cardRadius": 16, "controlRadius": 12, "borderWidth": 1, "cardBorder": "line", "shadow": "none" },
+      "type": { "titleDesign": "default", "titleWeight": "medium", "timerDesign": "rounded", "timerWeight": "thin" },
+      "ring": { "style": "smooth", "width": 3, "knob": true, "glow": true },
+      "light": { "background": "0A0E1C", "backgroundAlt": "0F1426", "surface": "141A2F", "subtle": "1A2139", "line": "262F4D",
+                 "ink": "E8EBF7", "muted": "9AA3C4", "accent": "F4B860", "accentSoft": "3A2E1A", "onAccent": "241703",
+                 "rest": "7FD1E6", "restSoft": "15303A", "danger": "FF8A8A", "highlight": "B9A6FF" },
+      "dark":  { "background": "0A0E1C", "backgroundAlt": "0F1426", "surface": "141A2F", "subtle": "1A2139", "line": "262F4D",
+                 "ink": "E8EBF7", "muted": "9AA3C4", "accent": "F4B860", "accentSoft": "3A2E1A", "onAccent": "241703",
+                 "rest": "7FD1E6", "restSoft": "15303A", "danger": "FF8A8A", "highlight": "B9A6FF" }
+    },
+    {
+      "id": "pixel", "title": "像素冒险", "tagline": "Habitica 风格的像素小游戏", "symbol": "gamecontroller",
+      "layout": "compact", "forcedScheme": null,
+      "shape": { "cardRadius": 0, "controlRadius": 0, "borderWidth": 2, "cardBorder": "ink", "shadow": "hard" },
+      "type": { "titleDesign": "monospaced", "titleWeight": "bold", "timerDesign": "pixel", "timerWeight": "bold" },
+      "ring": { "style": "segmented", "width": 10, "knob": false, "glow": false },
+      "light": { "background": "F3EFFA", "backgroundAlt": "EAE3F6", "surface": "FFFFFF", "subtle": "EFE9F8", "line": "D3C6EB",
+                 "ink": "2A1650", "muted": "5C4B80", "accent": "6133B4", "accentSoft": "E6DCF7", "onAccent": "FFFFFF",
+                 "rest": "17735A", "restSoft": "DDF3EA", "danger": "C02B36", "highlight": "A86400" },
+      "dark":  { "background": "1B1230", "backgroundAlt": "211739", "surface": "271B42", "subtle": "2F2250", "line": "4A3878",
+                 "ink": "F2ECFF", "muted": "B9ACDB", "accent": "B79CFF", "accentSoft": "3A2A66", "onAccent": "1B0F3A",
+                 "rest": "4FD6A5", "restSoft": "173A30", "danger": "FF7A85", "highlight": "FFB938" }
+    },
+    {
+      "id": "sakura", "title": "樱落", "tagline": "柔和、轻盈，适合慢节奏", "symbol": "sparkles",
+      "layout": "airy", "forcedScheme": null,
+      "shape": { "cardRadius": 22, "controlRadius": 16, "borderWidth": 1, "cardBorder": "line", "shadow": "soft" },
+      "type": { "titleDesign": "serif", "titleWeight": "medium", "timerDesign": "rounded", "timerWeight": "light" },
+      "ring": { "style": "smooth", "width": 5, "knob": true, "glow": false },
+      "light": { "background": "FFF7F8", "backgroundAlt": "FCEEF1", "surface": "FFFFFF", "subtle": "FCEFF2", "line": "F1D9DF",
+                 "ink": "3B2229", "muted": "765760", "accent": "AE4065", "accentSoft": "F9E1E8", "onAccent": "FFFFFF",
+                 "rest": "3A7258", "restSoft": "E2F0E8", "danger": "A32E2E", "highlight": "93630F" },
+      "dark":  { "background": "1C1316", "backgroundAlt": "22171B", "surface": "281B20", "subtle": "31222A", "line": "4A333C",
+                 "ink": "F8E9EE", "muted": "CDB0BA", "accent": "F59AB6", "accentSoft": "4A2432", "onAccent": "3A0D1C",
+                 "rest": "9FD4B8", "restSoft": "1E3329", "danger": "FF9A9A", "highlight": "F2C46B" }
+    }
+  ],
+  "shadows": {
+    "none":   { "radius": 0,  "x": 0, "y": 0, "opacity": 0.0,  "color": "ink" },
+    "soft":   { "radius": 10, "x": 0, "y": 2, "opacity": 0.06, "color": "ink" },
+    "lifted": { "radius": 18, "x": 0, "y": 6, "opacity": 0.10, "color": "accent" },
+    "hard":   { "radius": 0,  "x": 3, "y": 3, "opacity": 1.0,  "color": "ink" }
+  },
+  "pixelGlyphs": {
+    "width": 5, "height": 7,
+    "glyphs": {
+      "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
+      "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
+      "2": ["01110", "10001", "00001", "00010", "00100", "01000", "11111"],
+      "3": ["11111", "00010", "00100", "00010", "00001", "10001", "01110"],
+      "4": ["00010", "00110", "01010", "10010", "11111", "00010", "00010"],
+      "5": ["11111", "10000", "11110", "00001", "00001", "10001", "01110"],
+      "6": ["00110", "01000", "10000", "11110", "10001", "10001", "01110"],
+      "7": ["11111", "00001", "00010", "00100", "01000", "01000", "01000"],
+      "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
+      "9": ["01110", "10001", "10001", "01111", "00001", "00010", "01100"],
+      ":": ["0", "0", "1", "0", "1", "0", "0"],
+      "+": ["00000", "00100", "00100", "11111", "00100", "00100", "00000"],
+      "-": ["00000", "00000", "00000", "11111", "00000", "00000", "00000"]
+    }
+  }
+}

@@ -22,6 +22,9 @@ fun parseTopThreeNotes(notes: String): TopThreeNotes? {
     return TopThreeNotes(parts[0], parts[1])
 }
 
+/** Pending or server-confirmed deletion: a stale cloud response must never bring this ID back. */
+fun TopThreeStore.isTombstoned(remoteId: String): Boolean = remoteId in deletedCloudIds || remoteId in confirmedDeletedCloudIds
+
 /** An attempt belongs to one UUID even when its moved/archive copies retain the same marker. */
 fun TopThreeStore.pendingCreateCandidates(title: String, notes: String): List<TopThreeTask> =
     history.values.flatMap { it.taskGroups.flatten() }.filter {
@@ -54,7 +57,7 @@ fun mergeTopThreeTodos(local: TopThreeStore, remote: List<CloudTodo>): TopThreeS
         }) }
     }
     for (todo in cloud) {
-        if (todo.id.isBlank() || todo.title.isBlank() || todo.id in local.deletedCloudIds) continue
+        if (todo.id.isBlank() || todo.title.isBlank() || local.isTombstoned(todo.id)) continue
         val marker = parseTopThreeNotes(todo.notes) ?: continue
         val current = local.copy(history = history)
         if (current.quarantinesDeletedCreation(todo)) continue

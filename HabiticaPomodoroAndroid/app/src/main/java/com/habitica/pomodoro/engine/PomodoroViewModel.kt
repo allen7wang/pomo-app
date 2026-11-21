@@ -28,6 +28,19 @@ import com.habitica.pomodoro.data.normalized
 import com.habitica.pomodoro.data.cloudAccount
 import com.habitica.pomodoro.data.isValidHabiticaUid
 import com.habitica.pomodoro.data.TimerBusinessSnapshot
+import com.habitica.pomodoro.data.HabiticaFeedbackOrder
+import com.habitica.pomodoro.data.HabiticaGate
+import com.habitica.pomodoro.data.HabiticaRequestBudgets
+import com.habitica.pomodoro.data.TOP_THREE_FIXED_SLOT_CATEGORIES
+import com.habitica.pomodoro.data.TOP_THREE_MAX_FIXED_TASKS
+import com.habitica.pomodoro.data.UnfinishedTask
+import com.habitica.pomodoro.data.definitelyNotCreated
+import com.habitica.pomodoro.data.hasRoom
+import com.habitica.pomodoro.data.isTombstoned
+import com.habitica.pomodoro.data.isUnfinished
+import com.habitica.pomodoro.data.latestActiveCopy
+import com.habitica.pomodoro.data.movingUnfinishedToToday
+import com.habitica.pomodoro.data.unfinishedTasks
 import com.habitica.pomodoro.service.PomodoroTimerService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -114,10 +127,47 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
     /** 跨番茄记忆：新番茄随机场景时避开上一个（激活场景清空后仍保留，与 Apple lastQishiSceneId 一致） */
     private var lastQishiSceneId: String? = null
 
-    private fun isCurrentAccount(settings: UserSettings, generation: Int): Boolean {
-        val now = _state.value.settings
-        return generation == accountGeneration && now.uid == settings.uid &&
-            now.apiToken == settings.apiToken && now.connectHabitica == settings.connectHabitica && now.developerServerUrl == settings.developerServerUrl
+    /** Same epoch and same connection (UID, token, connect toggle, effective API root). */
+    private fun isCurrentAccount(settings: UserSettings, generation: Int): Boolean =
+        generation == accountGeneration && HabiticaGate.sameConnection(_state.value.settings, settings)
+
+    // v2.1.4 feedback ordering. Every Habitica call takes a dispatch sequence number; a channel shows an
+    // error only if no later-dispatched request already reported one, and a success clears only errors
+    // published before it was dispatched. Authentication is ordered across all features.
+    private var requestSequence = 0L
+    private var latestAuthSequence = 0L
+    private var latestProfileSequence = 0L
+    private val tasksFeedback = HabiticaFeedbackOrder()
+    private val profileFeedback = HabiticaFeedbackOrder()
+    private val topThreeFeedback = HabiticaFeedbackOrder()
+    /** Deletion markers added while that UUID's POST was in flight; a definite rejection takes them back. */
+    private val rejectableDeletionMarkers = mutableMapOf<String, Pair<String, String>>()
+
+    private fun rateLimitMessage(settings: UserSettings): String? = HabiticaRequestBudgets.rateLimitMessage(settings.cloudAccount())
+
+    /** All Habitica calls go through here so a current 401 from any feature revokes the shown role. */
+    private suspend fun <T> habitica(
+        settings: UserSettings,
+        sequence: Long = ++requestSequence,
+        call: suspend () -> HabiticaAPI.Result<T>,
+    ): HabiticaAPI.Result<T> {
+        val generation = accountGeneration
+        val result = call()
+        if (result is HabiticaAPI.Result.Error && result.statusCode == 401 && isCurrentAccount(settings, generation))
+            noteAuthenticationFailure(sequence)
+        return result
+    }
+
+    private fun noteAuthenticationFailure(sequence: Long) {
+        if (sequence < latestAuthSequence) return
+        latestAuthSequence = sequence
+        _state.value = _state.value.copy(profile = null,
+            profileError = if (profileFeedback.acceptError(sequence)) HabiticaGate.AUTH_FAILED else _state.value.profileError)
+    }
+
+    private fun publishTopThreeError(message: String) {
+        topThreeFeedback.noteError()
+        _state.value = _state.value.copy(topThreeSyncError = message)
     }
 
     private val habitMutex = kotlinx.coroutines.sync.Mutex()
@@ -134,6 +184,7 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun loadAll() {
         val settings = store.loadSettings()
+        HabiticaGate.activate(settings)
         val topThree = store.loadTopThree().forAccount(settings.cloudAccount())
         val topThreeSaved = store.saveTopThree(topThree)
         val todayKey = calendarDayKey()
@@ -431,7 +482,7 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         }
         for (id in ids) {
             if (!isCurrentAccount(settings, generation)) return
-            val result = HabiticaAPI.scoreTask(settings, id, "up")
+            val result = habitica(settings) { HabiticaAPI.scoreTask(settings, id, "up") }
             if (!isCurrentAccount(settings, generation)) return
             if (result is HabiticaAPI.Result.Error) _state.value = _state.value.copy(message = result.message + "；本机完成记录已保留，未自动重试以免重复奖励")
         }
@@ -444,7 +495,7 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val id = resolveHabit(settings, false, generation, captured) ?: return@launch
             if (!isCurrentAccount(settings, generation)) return@launch
-            val result = HabiticaAPI.scoreTask(settings, id, "down")
+            val result = habitica(settings) { HabiticaAPI.scoreTask(settings, id, "down") }
             if (!isCurrentAccount(settings, generation)) return@launch
             if (result is HabiticaAPI.Result.Error) _state.value = _state.value.copy(message = result.message)
             else refreshProfile()
@@ -485,7 +536,7 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         if (!enabled || !settings.connectHabitica || !isValidHabiticaUid(settings.uid) || settings.apiToken.isBlank()) return
         val generation = accountGeneration
         viewModelScope.launch {
-            val r = HabiticaAPI.sendPrivateMessage(settings, message)
+            val r = habitica(settings) { HabiticaAPI.sendPrivateMessage(settings, message) }
             if (isCurrentAccount(settings, generation) && r is HabiticaAPI.Result.Error) _state.value = _state.value.copy(message = r.message)
         }
     }
@@ -506,7 +557,7 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         habitMutex.lock()
         try {
             if (!isCurrentAccount(settings, generation)) return null
-            val r = HabiticaAPI.ensureHabit(settings, combo)
+            val r = habitica(settings) { HabiticaAPI.ensureHabit(settings, combo) }
             if (!isCurrentAccount(settings, generation)) return null
             if (r is HabiticaAPI.Result.Error) { _state.value = _state.value.copy(message = r.message); return null }
             val current = _state.value.settings
@@ -544,19 +595,33 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         }
         val generation = accountGeneration
         profileJob = viewModelScope.launch {
-            _state.value = _state.value.copy(profileLoading = true, profileError = null)
+            _state.value = _state.value.copy(profileLoading = true)
+            val sequence = ++requestSequence
+            val revision = profileFeedback.revision
             val result = HabiticaAPI.fetchProfile(settings)
             if (!isCurrentAccount(settings, generation)) return@launch
             when (result) {
-                is HabiticaAPI.Result.Success -> _state.value = _state.value.copy(
-                    profile = result.value,
-                    profileLoading = false,
-                    profileError = null,
-                )
-                is HabiticaAPI.Result.Error -> _state.value = _state.value.copy(
-                    profileLoading = false,
-                    profileError = result.message,
-                )
+                is HabiticaAPI.Result.Success -> {
+                    // An older role response may not undo a newer 401 or replace a newer profile.
+                    if (sequence < latestAuthSequence || sequence < latestProfileSequence) {
+                        _state.value = _state.value.copy(profileLoading = false)
+                        return@launch
+                    }
+                    latestAuthSequence = sequence
+                    latestProfileSequence = sequence
+                    _state.value = _state.value.copy(
+                        profile = result.value,
+                        profileLoading = false,
+                        profileError = if (profileFeedback.mayClear(revision) && !HabiticaRequestBudgets.coolingDown429(settings.cloudAccount())) null
+                            else _state.value.profileError,
+                    )
+                }
+                is HabiticaAPI.Result.Error -> {
+                    if (result.statusCode == 401) noteAuthenticationFailure(sequence)
+                    else if (profileFeedback.acceptError(sequence)) _state.value = _state.value.copy(profileError = result.message)
+                    // Keep the last role shown for this account; only an authentication failure revokes it.
+                    _state.value = _state.value.copy(profileLoading = false)
+                }
             }
         }
     }
@@ -580,11 +645,17 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         _state.value = _state.value.copy(settings = settings,
             // FIX2(D2): surface a failed settings save; keep an active Top3 error otherwise.
             persistenceError = if (settingsSaved) _state.value.persistenceError else SETTINGS_PERSIST_FAILED)
+        // Before anything else can dispatch: a new connection retires every in-flight read and queued
+        // request of the old one. Ordinary preferences and equivalent API roots keep the connection.
+        HabiticaGate.activate(settings)
         refreshDay()
-        if (old.uid != settings.uid || old.apiToken != settings.apiToken || old.connectHabitica != settings.connectHabitica || old.developerServerUrl != settings.developerServerUrl) {
+        if (!HabiticaGate.sameConnection(old, settings)) {
             accountGeneration++
             tasksGeneration++
             topThreeSyncGeneration++
+            tasksFeedback.reset()
+            profileFeedback.reset()
+            topThreeFeedback.reset()
             profileJob?.cancel()
             tasksJob?.cancel()
             topThreeSyncJob?.cancel()
@@ -711,6 +782,7 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         refreshDay()
     }
 
+    /** A failed or malformed load keeps the list already shown for this account; a legal empty list clears it. */
     fun refreshHabiticaTasks(type: String) {
         if (type != "habits" && type != "dailys") return
         val settings = _state.value.settings
@@ -719,17 +791,32 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         val generation = accountGeneration
         val request = ++tasksGeneration
         tasksJob = viewModelScope.launch {
-            _state.value = _state.value.copy(tasksLoading = true, tasksError = null)
-            val result = HabiticaAPI.fetchTaskItems(settings, type)
+            _state.value = _state.value.copy(tasksLoading = true)
+            val revision = tasksFeedback.revision
+            val sequence = ++requestSequence
+            val result = habitica(settings, sequence) { HabiticaAPI.fetchTaskItems(settings, type) }
             if (!isCurrentAccount(settings, generation) || request != tasksGeneration) return@launch
             when (result) {
                 is HabiticaAPI.Result.Success -> {
                     _state.value = if (type == "habits") _state.value.copy(habits = result.value.sortedBy { it.value }, tasksLoading = false)
                     else _state.value.copy(dailies = result.value, tasksLoading = false)
+                    clearTasksError(settings, revision)
                 }
-                is HabiticaAPI.Result.Error -> _state.value = _state.value.copy(tasksLoading = false, tasksError = result.message)
+                is HabiticaAPI.Result.Error -> {
+                    _state.value = _state.value.copy(tasksLoading = false)
+                    publishTasksError(sequence, result.message)
+                }
             }
         }
+    }
+
+    private fun publishTasksError(sequence: Long, message: String) {
+        if (tasksFeedback.acceptError(sequence)) _state.value = _state.value.copy(tasksError = message)
+    }
+
+    private fun clearTasksError(settings: UserSettings, revisionAtDispatch: Long) {
+        if (tasksFeedback.mayClear(revisionAtDispatch) && !HabiticaRequestBudgets.coolingDown429(settings.cloudAccount()))
+            _state.value = _state.value.copy(tasksError = null)
     }
 
     fun scoreHabiticaTask(type: String, item: HabiticaTaskItem, direction: String) {
@@ -737,14 +824,18 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         val settings = _state.value.settings
         val generation = accountGeneration
         viewModelScope.launch {
-            _state.value = _state.value.copy(scoringIds = _state.value.scoringIds + item.id, tasksError = null)
-            val result = HabiticaAPI.scoreTask(settings, item.id, direction)
+            _state.value = _state.value.copy(scoringIds = _state.value.scoringIds + item.id)
+            val revision = tasksFeedback.revision
+            val sequence = ++requestSequence
+            // Sent once; a rejected or failed score is reported, never queued or replayed.
+            val result = habitica(settings, sequence) { HabiticaAPI.scoreTask(settings, item.id, direction) }
             if (!isCurrentAccount(settings, generation)) return@launch
             when (result) {
-                is HabiticaAPI.Result.Error -> _state.value = _state.value.copy(tasksError = result.message)
+                is HabiticaAPI.Result.Error -> publishTasksError(sequence, result.message)
                 is HabiticaAPI.Result.Success -> {
                     if (type == "habits") _state.value = _state.value.copy(habits = _state.value.habits.map { if (it.id == item.id) it.copy(value = it.value + if (direction == "up") 1 else -1) else it })
                     else _state.value = _state.value.copy(dailies = _state.value.dailies.map { if (it.id == item.id) it.copy(completed = !it.completed) else it })
+                    clearTasksError(settings, revision)
                     refreshProfile()
                 }
             }
@@ -804,23 +895,26 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         val settings = _state.value.settings.copy()
         if (!settings.connectHabitica || !isValidHabiticaUid(settings.uid) || settings.apiToken.isBlank()) return
         if (creatingTasks > 0) return
+        // During a cooldown nothing is sent; a manual refresh afterwards continues normally.
+        rateLimitMessage(settings)?.let { publishTopThreeError(it); return }
         topThreeSyncJob?.cancel()
         val generation = accountGeneration
         val request = ++topThreeSyncGeneration
         val revision = localRevision
+        val feedbackRevision = topThreeFeedback.revision
         topThreeSyncJob = viewModelScope.launch {
             // FIX3(D4): no optimistic clear at cycle start — an error whose condition
             // is still active (markers, delete protection, persistence failure) must
             // stay displayed. Clearing happens at successful completion, guarded.
             _state.value = _state.value.copy(topThreeSyncing = true)
-            val result = HabiticaAPI.fetchTopThreeTodos(settings)
+            val result = habitica(settings) { HabiticaAPI.fetchTopThreeTodos(settings) }
             if (!isCurrentAccount(settings, generation) || request != topThreeSyncGeneration) return@launch
             when (result) {
                 is HabiticaAPI.Result.Success -> {
                     val current = _state.value.store
                     val merged = if (revision == localRevision && creatingTasks == 0) mergeTopThreeTodos(current, result.value) else current
                     if (merged != current) persistStore(merged)
-                    val deletionConflict = result.value.any { it.id !in current.deletedCloudIds && current.quarantinesDeletedCreation(it) }
+                    val deletionConflict = result.value.any { !current.isTombstoned(it.id) && current.quarantinesDeletedCreation(it) }
                     // FIX3(D4): a stale error must not survive a clean successful cycle, but
                     // never clear while an error condition is still active: quarantine
                     // conflict (this cycle), unresolved create markers, delete protection for
@@ -833,14 +927,21 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
                                 !(latest.deletedCloudTaskOrigins[id] == it.id && it.movedToToday)
                         } }
                     }
+                    // v2.1.4: an error published after this refresh was dispatched (or a running 429
+                    // cooldown) is newer than this success and stays visible.
+                    val newerError = !topThreeFeedback.mayClear(feedbackRevision) || HabiticaRequestBudgets.coolingDown429(settings.cloudAccount())
+                    if (deletionConflict) topThreeFeedback.noteError()
                     _state.value = _state.value.copy(topThreeSyncing = false,
                         topThreeSyncError = when {
                             deletionConflict -> "未确认创建请求的删除仍待核对；同日期 notes 的未知任务已隔离（包括改名任务），请人工核对，未按 notes 删除"
-                            markersPending || deleteProtectionActive || _state.value.persistenceError != null -> _state.value.topThreeSyncError
+                            markersPending || deleteProtectionActive || _state.value.persistenceError != null || newerError -> _state.value.topThreeSyncError
                             else -> null
                         })
                 }
-                is HabiticaAPI.Result.Error -> _state.value = _state.value.copy(topThreeSyncing = false, topThreeSyncError = result.message)
+                is HabiticaAPI.Result.Error -> {
+                    _state.value = _state.value.copy(topThreeSyncing = false)
+                    publishTopThreeError(result.message)
+                }
             }
         }
     }
@@ -893,29 +994,47 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun deleteTask(categoryIndex: Int, taskIndex: Int) {
-        val s = _state.value.store; val key = todayKey(); val day = s.history[key] ?: return
+        val day = _state.value.store.history[todayKey()] ?: return
         val task = day.taskGroups.getOrNull(categoryIndex)?.getOrNull(taskIndex) ?: return
         if (task.movedToToday) return
+        removeTask(todayKey(), categoryIndex, task.id, fromUnfinished = false)
+    }
+
+    /**
+     * Today's tasks, or (fromUnfinished) an unfinished task from an earlier day. The UUID is resolved again
+     * at action time, so a stale row cannot remove a moved copy or its archive.
+     */
+    private fun removeTask(key: String, categoryIndex: Int, id: String, fromUnfinished: Boolean): Boolean {
+        val today = todayKey()
+        if (if (fromUnfinished) key >= today else key != today) return false
+        val s = _state.value.store
+        val (date, index, task) = s.latestActiveCopy(id) ?: return false
+        if (date != key || index != categoryIndex || (fromUnfinished && !task.isUnfinished)) return false
+        val day = s.history.getValue(key)
         val groups = day.taskGroups.mapIndexed { gi, g -> if (gi == categoryIndex) g.filterNot { it.id == task.id && !it.movedToToday } else g }
         val owner = _state.value.settings.cloudAccount()
         val owned = owner != null && s.cloudAccount == owner && task.cloudAccount == owner
-        val id = task.habiticaTaskId.takeIf { owned }
+        val remoteId = task.habiticaTaskId.takeIf { owned }
         // Persist tombstone BEFORE attempting delete; inbound refresh cannot resurrect a failed delete.
         val marker = if (owned) task.pendingCreateTitle?.let { title -> task.pendingCreateNotes?.let { "$it\n$title" } } else null
-        persistStore(s.copy(history = s.history + (key to day.copy(taskGroups = groups)), deletedCloudIds = s.deletedCloudIds + listOfNotNull(id),
-            deletedCloudTaskOrigins = if (id == null) s.deletedCloudTaskOrigins else s.deletedCloudTaskOrigins + (id to task.id),
+        // A POST still in flight may yet be refused outright (401/429); then this marker must not outlive it.
+        if (marker != null && owner != null && task.id in creationIds && marker !in s.deletedCreateMarkers)
+            rejectableDeletionMarkers[task.id] = owner to marker
+        persistStore(s.copy(history = s.history + (key to day.copy(taskGroups = groups)), deletedCloudIds = s.deletedCloudIds + listOfNotNull(remoteId),
+            deletedCloudTaskOrigins = if (remoteId == null) s.deletedCloudTaskOrigins else s.deletedCloudTaskOrigins + (remoteId to task.id),
             // D1: link the queued remote id to its lost-creation marker so any later
             // marker-less consumption of the queue entry retires the marker atomically.
-            deletedCloudIdMarkers = if (id == null || marker == null) s.deletedCloudIdMarkers else s.deletedCloudIdMarkers + (id to marker),
+            deletedCloudIdMarkers = if (remoteId == null || marker == null) s.deletedCloudIdMarkers else s.deletedCloudIdMarkers + (remoteId to marker),
             deletedCreateMarkers = s.deletedCreateMarkers + listOfNotNull(marker)))
-        id?.let { deleteCloudTask(it) }
+        remoteId?.let { deleteCloudTask(it) }
         if (marker != null) retryDeletedCreations()
+        return true
     }
 
     private fun deleteCloudTask(id: String, marker: String? = null) {
         val settings = _state.value.settings; val generation = accountGeneration
         if (!settings.connectHabitica || !isValidHabiticaUid(settings.uid) || settings.apiToken.isBlank()) {
-            _state.value = _state.value.copy(topThreeSyncError = "删除已保留在本机；连接 Habitica 后可重试待同步操作")
+            publishTopThreeError("删除已保留在本机；连接 Habitica 后可重试待同步操作")
             return
         }
         viewModelScope.launch {
@@ -931,15 +1050,21 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
                     it.cloudAccount == latest.cloudAccount && it.habiticaTaskId == id &&
                         !(originalId != null && it.id == originalId && it.movedToToday)
                 } }) {
-                    _state.value = _state.value.copy(topThreeSyncError = "待删除 ID 已绑定本地任务；删除保护保留，请人工核对")
+                    publishTopThreeError("待删除 ID 已绑定本地任务；删除保护保留，请人工核对")
                     return false
                 }
                 return true
             }
             if (!mayDelete()) return@launch
-            val result = HabiticaAPI.deleteTodo(settings, id)
+            if (_state.value.persistenceError == TOP_THREE_PERSIST_FAILED && !persistStore(_state.value.store)) return@launch
+            val result = habitica(settings) { HabiticaAPI.deleteTodo(settings, id) }
             if (!mayDelete()) return@launch
-            val readBack = HabiticaAPI.fetchTodo(settings, id)
+            if (result is HabiticaAPI.Result.Error && !result.dispatched) {
+                // Never sent (cooldown/budget/retired connection): the queue entry stays for a later manual retry.
+                publishTopThreeError(result.message)
+                return@launch
+            }
+            val readBack = habitica(settings) { HabiticaAPI.fetchTodo(settings, id) }
             if (!mayDelete()) return@launch
             if (readBack is HabiticaAPI.Result.Error && readBack.statusCode == 404) {
                 val s = _state.value.store
@@ -947,10 +1072,12 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
                 // linked to this remote id in the SAME atomic save, or it orphans forever —
                 // re-erroring every sync and quarantining future legitimate cloud todos.
                 val resolvedMarker = marker ?: s.deletedCloudIdMarkers[id]
-                persistStore(s.copy(deletedCloudIds = s.deletedCloudIds - id, deletedCloudTaskOrigins = s.deletedCloudTaskOrigins - id,
+                // Confirmed: never send this DELETE again, but keep the tombstone against stale reads.
+                persistStore(s.copy(deletedCloudIds = s.deletedCloudIds - id, confirmedDeletedCloudIds = s.confirmedDeletedCloudIds + id,
+                    deletedCloudTaskOrigins = s.deletedCloudTaskOrigins - id,
                     deletedCloudIdMarkers = s.deletedCloudIdMarkers - id,
                     deletedCreateMarkers = if (resolvedMarker == null) s.deletedCreateMarkers else s.deletedCreateMarkers - resolvedMarker))
-            } else _state.value = _state.value.copy(topThreeSyncError = "远端删除尚未确认；本机删除保留，可重试")
+            } else publishTopThreeError(rateLimitMessage(settings) ?: "远端删除尚未确认；本机删除保留，可重试")
         }
     }
 
@@ -958,9 +1085,9 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         _state.value.store.history.entries.sortedByDescending { it.key }.firstNotNullOfOrNull { (date, day) ->
             day.taskGroups.withIndex().firstNotNullOfOrNull { (index, group) -> group.firstOrNull { it.id == id && !it.movedToToday }?.let { Triple(date, index, it) } }
         }
-    private fun replaceTask(id: String, transform: (com.habitica.pomodoro.data.TopThreeTask) -> com.habitica.pomodoro.data.TopThreeTask) {
+    private fun replaceTask(id: String, transform: (com.habitica.pomodoro.data.TopThreeTask) -> com.habitica.pomodoro.data.TopThreeTask): Boolean {
         val s = _state.value.store
-        persistStore(s.copy(history = s.history.mapValues { (_, day) -> day.copy(taskGroups = day.taskGroups.map { list -> list.map { if (it.id == id) transform(it) else it } }) }))
+        return persistStore(s.copy(history = s.history.mapValues { (_, day) -> day.copy(taskGroups = day.taskGroups.map { list -> list.map { if (it.id == id) transform(it) else it } }) }))
     }
 
     private data class TaskSyncSnapshot(
@@ -986,7 +1113,7 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         }
         val message = "$reason；本机修改保留，未继续写入或确认"
         replaceTask(snapshot.localId) { if (it.cloudAccount == snapshot.owner) it.copy(syncError = message) else it }
-        _state.value = _state.value.copy(topThreeSyncError = message)
+        publishTopThreeError(message)
         return false
     }
 
@@ -1004,28 +1131,32 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
                     val remoteId = task.habiticaTaskId ?: return@launch
                     if (!task.syncPending) return@launch
                     val snapshot = syncSnapshot(localId) ?: return@launch
+                    if (!maySyncTask(snapshot, settings, generation)) {
+                        return@launch
+                    }
                     val category = snapshot.category
-                    if (!maySyncTask(snapshot, settings, generation)) return@launch
                     val tag = resolveCategoryTag(settings, category, generation) { maySyncTask(snapshot, settings, generation) }
                     if (!maySyncTask(snapshot, settings, generation)) return@launch
                     if (tag !is HabiticaAPI.Result.Success || tag.value.isNullOrBlank()) {
-                        replaceTask(localId) { it.copy(syncError = "分类 tag 同步失败，本机修改保留") }; return@launch
+                        val notSent = (tag as? HabiticaAPI.Result.Error)?.takeIf { !it.dispatched }?.message
+                        replaceTask(localId) { it.copy(syncError = notSent?.let { reason -> "$reason 本机修改已保留。" } ?: "分类 tag 同步失败，本机修改保留") }
+                        return@launch
                     }
                     val notes = topThreeNotes(category, date)
-                    val updated = HabiticaAPI.updateTodo(settings, remoteId, task.title, notes, listOf(tag.value!!))
+                    val updated = habitica(settings) { HabiticaAPI.updateTodo(settings, remoteId, task.title, notes, listOf(tag.value!!)) }
                     if (!maySyncTask(snapshot, settings, generation)) return@launch
                     if (updated is HabiticaAPI.Result.Error) {
                         replaceTask(localId) { it.copy(syncError = updated.message) }; return@launch
                     }
-                    var remote = HabiticaAPI.fetchTodo(settings, remoteId)
+                    var remote = habitica(settings) { HabiticaAPI.fetchTodo(settings, remoteId) }
                     if (!maySyncTask(snapshot, settings, generation)) return@launch
                     if (remote is HabiticaAPI.Result.Success && remote.value.completed != task.isCompleted) {
-                        val score = HabiticaAPI.scoreTask(settings, remoteId, if (task.isCompleted) "up" else "down")
+                        val score = habitica(settings) { HabiticaAPI.scoreTask(settings, remoteId, if (task.isCompleted) "up" else "down") }
                         if (!maySyncTask(snapshot, settings, generation)) return@launch
                         if (score is HabiticaAPI.Result.Error) {
                             replaceTask(localId) { it.copy(syncError = score.message) }; return@launch
                         }
-                        remote = HabiticaAPI.fetchTodo(settings, remoteId)
+                        remote = habitica(settings) { HabiticaAPI.fetchTodo(settings, remoteId) }
                         if (!maySyncTask(snapshot, settings, generation)) return@launch
                     }
                     if (!maySyncTask(snapshot, settings, generation)) return@launch
@@ -1046,9 +1177,9 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         val settings = _state.value.settings; val generation = accountGeneration
         if (!settings.connectHabitica || !isValidHabiticaUid(settings.uid) || settings.apiToken.isBlank()) return
         viewModelScope.launch {
-            val r = HabiticaAPI.fetchTopThreeTodos(settings)
+            val r = habitica(settings) { HabiticaAPI.fetchTopThreeTodos(settings) }
             if (!isCurrentAccount(settings, generation)) return@launch
-            if (r is HabiticaAPI.Result.Error) { _state.value = _state.value.copy(topThreeSyncError = r.message); return@launch }
+            if (r is HabiticaAPI.Result.Error) { publishTopThreeError(r.message); return@launch }
             for (marker in _state.value.store.deletedCreateMarkers) {
                 val current = _state.value.store
                 val linked = current.history.values.flatMap { it.taskGroups.flatten() }.filter { it.cloudAccount == current.cloudAccount }.mapNotNull { it.habiticaTaskId }.toSet()
@@ -1063,18 +1194,29 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
                         deletedCloudIdMarkers = current.deletedCloudIdMarkers + (id to marker)))
                     deleteCloudTask(id, marker)
                 }
-                else _state.value = _state.value.copy(topThreeSyncError = "未确认创建请求的删除已保护在本机；云端匹配不唯一或尚不可见，请稍后重试/人工核对")
+                else publishTopThreeError("未确认创建请求的删除已保护在本机；云端匹配不唯一或尚不可见，请稍后重试/人工核对")
             }
         }
     }
 
+    /** Manual retry. During a cooldown nothing is sent; afterwards it continues from the persisted queues. */
     fun retryPendingTasks() {
+        val settings = _state.value.settings
+        fun limited(): Boolean = rateLimitMessage(settings)?.also { publishTopThreeError(it) } != null
+        if (limited()) return
         retryCategoryTags()
-        _state.value.store.deletedCloudIds.forEach { deleteCloudTask(it) }
+        for (id in _state.value.store.deletedCloudIds) {
+            if (limited()) return
+            deleteCloudTask(id)
+        }
+        if (limited()) return
         retryDeletedCreations()
-        _state.value.store.history.forEach { (date, day) -> day.taskGroups.forEachIndexed { i, group -> group.filter { it.syncPending && !it.movedToToday }.forEach {
-            if (it.habiticaTaskId == null) syncTaskToHabitica(i, it, date) else syncExistingTask(it.id)
-        } } }
+        for ((date, day) in _state.value.store.history) day.taskGroups.forEachIndexed { i, group ->
+            for (task in group.filter { it.syncPending && !it.movedToToday }) {
+                if (limited()) return
+                if (task.habiticaTaskId == null) syncTaskToHabitica(i, task, date) else syncExistingTask(task.id)
+            }
+        }
     }
 
     /**
@@ -1094,43 +1236,41 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         persistStore(s.copy(deletedCreateMarkers = emptySet(), deletedCloudIdMarkers = emptyMap()))
     }
 
-    /** 昨天未完成的任务移动到今天（对应 Swift moveTaskToToday） */
+    /** 昨天未完成的任务移动到今天（对应 Swift moveTaskToToday）；与「未完成任务」走同一路径 */
     fun moveTaskToToday(categoryIndex: Int, taskIndex: Int) {
-        val s = _state.value.store
-        val settings = _state.value.settings
-        val yesterdayKey = store.yesterdayKey(settings)
-        val todayKey = store.logicalDateKey(settings)
-        val yesterday = s.history[yesterdayKey] ?: return
-        val task = yesterday.taskGroups.getOrNull(categoryIndex)?.getOrNull(taskIndex) ?: return
+        val task = _state.value.store.history[yesterdayKey()]?.taskGroups?.getOrNull(categoryIndex)?.getOrNull(taskIndex) ?: return
         if (task.isCompleted || task.movedToToday) return
-
-        val limit = if (categoryIndex < FIXED_SLOT_CATEGORIES) MAX_FIXED_TASKS else Int.MAX_VALUE
-        val today = s.history[todayKey] ?: newDay(todayKey, s.categoryNames.size)
-        val tGroups = today.taskGroups.toMutableList()
-        while (tGroups.size <= categoryIndex) tGroups.add(emptyList())
-        val tGroup = tGroups[categoryIndex].toMutableList()
-        if (tGroup.count { !it.movedToToday } >= limit) {
-            _state.value = _state.value.copy(message = "今天的该分类已满 $limit 条")
-            return
-        }
-        tGroup.add(task.copy(movedToToday = false))
-        tGroups[categoryIndex] = tGroup
-
-        // 标记原任务已移动
-        val yGroups = yesterday.taskGroups.mapIndexed { gi, g ->
-            if (gi == categoryIndex) g.mapIndexed { ti, t ->
-                if (ti == taskIndex) t.copy(movedToToday = true) else t
-            } else g
-        }
-        val newStore = s.copy(
-            history = s.history +
-                (yesterdayKey to yesterday.copy(taskGroups = yGroups)) +
-                (todayKey to today.copy(taskGroups = tGroups)),
-        )
-        persistStore(newStore)
-        replaceTask(task.id) { it.copy(syncPending = true, syncError = null, syncVersion = it.syncVersion + 1) }
-        if (task.habiticaTaskId != null) syncExistingTask(task.id)
+        moveUnfinishedToToday(yesterdayKey(), categoryIndex, task.id)?.let { _state.value = _state.value.copy(message = it) }
     }
+
+    // MARK: - 未完成任务（昨天及更早，逻辑日）
+
+    fun unfinishedTasks(): List<UnfinishedTask> = _state.value.store.unfinishedTasks(todayKey())
+
+    /** Whether today's copy of this category still has room (Work/MyOwn 3, Chores unlimited). */
+    fun canMoveToToday(categoryIndex: Int): Boolean = _state.value.store.hasRoom(todayKey(), categoryIndex)
+
+    /**
+     * Move to today's original category; returns null on success, otherwise a hint and the task stays in the
+     * unfinished list. The source day keeps a movedToToday archive copy with the same UUID and remote ID.
+     */
+    fun moveUnfinishedToToday(dateKey: String, categoryIndex: Int, id: String): String? {
+        val s = _state.value.store
+        val today = todayKey()
+        if (!s.hasRoom(today, categoryIndex)) {
+            val name = s.categoryNames.getOrNull(categoryIndex) ?: "该分类"
+            return "今天的「$name」已满 ${TOP_THREE_MAX_FIXED_TASKS} 条，任务保留在未完成列表"
+        }
+        val next = s.movingUnfinishedToToday(dateKey, categoryIndex, id, today) ?: return "任务已完成、已转移或已变化，未转到今天"
+        persistStore(next)
+        val moved = next.history.getValue(today).taskGroups[categoryIndex].first { it.id == id && !it.movedToToday }
+        if (moved.habiticaTaskId != null) syncExistingTask(id) else syncTaskToHabitica(categoryIndex, moved, today)
+        return null
+    }
+
+    /** Delete an unfinished task (UI confirms first); queues the remote delete with the usual tombstone. */
+    fun deleteUnfinishedTask(dateKey: String, categoryIndex: Int, id: String): Boolean =
+        removeTask(dateKey, categoryIndex, id, fromUnfinished = true)
 
     fun renameCategory(index: Int, newName: String) {
         val trimmed = newName.trim()
@@ -1161,26 +1301,30 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
             val desired = current.pendingTagNames[known]
             if (desired != null) {
                 if (desired != category) return HabiticaAPI.Result.Error("分类名称已变化；修改保留")
-                val result = HabiticaAPI.updateTag(settings, known, desired)
+                val result = habitica(settings) { HabiticaAPI.updateTag(settings, known, desired) }
                 if (!stillValid()) return HabiticaAPI.Result.Error("任务同步快照已变化")
                 if (!isCurrentAccount(settings, generation)) return HabiticaAPI.Result.Error("账号已变化")
                 if (result is HabiticaAPI.Result.Error) return result
             }
-            val tags = HabiticaAPI.fetchTags(settings)
+            val tags = habitica(settings) { HabiticaAPI.fetchTags(settings) }
             if (!isCurrentAccount(settings, generation)) return HabiticaAPI.Result.Error("账号已变化")
             if (tags is HabiticaAPI.Result.Error) return tags
-            if (!stillValid()) return HabiticaAPI.Result.Error("任务同步快照已变化")
-            if ((tags as HabiticaAPI.Result.Success).value[category] != known) return HabiticaAPI.Result.Error("分类 tag 改名未确认；本机保留，可重试旧 ID")
+            if (!stillValid()) {
+                return HabiticaAPI.Result.Error("任务同步快照已变化")
+            }
+            if ((tags as HabiticaAPI.Result.Success).value[category] != known) {
+                return HabiticaAPI.Result.Error("分类 tag 改名未确认；本机保留，可重试旧 ID")
+            }
             val latest = _state.value.store
             if (latest.categoryTagIds[category] != known || latest.pendingTagNames[known] != desired) return HabiticaAPI.Result.Error("分类名称已变化；修改保留")
             if (desired != null) persistStore(latest.copy(pendingTagNames = latest.pendingTagNames - known))
             return HabiticaAPI.Result.Success(known)
         }
-        val result = HabiticaAPI.ensureTag(settings, category)
+        val result = habitica(settings) { HabiticaAPI.ensureTag(settings, category) }
         if (!stillValid()) return HabiticaAPI.Result.Error("任务同步快照已变化")
         if (!isCurrentAccount(settings, generation)) return HabiticaAPI.Result.Error("账号已变化")
         if (result is HabiticaAPI.Result.Success && !result.value.isNullOrBlank()) {
-            val tags = HabiticaAPI.fetchTags(settings)
+            val tags = habitica(settings) { HabiticaAPI.fetchTags(settings) }
             if (!isCurrentAccount(settings, generation)) return HabiticaAPI.Result.Error("账号已变化")
             if (tags !is HabiticaAPI.Result.Success || tags.value[category] != result.value) return HabiticaAPI.Result.Error("分类 tag 创建未确认；本机保留")
             if (!stillValid()) return HabiticaAPI.Result.Error("任务同步快照已变化")
@@ -1200,18 +1344,19 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
                 for (name in _state.value.store.pendingTagNames.values.toSet()) {
                     val result = resolveCategoryTag(settings, name, generation)
                     if (!isCurrentAccount(settings, generation)) return@launch
-                    if (result is HabiticaAPI.Result.Error) _state.value = _state.value.copy(topThreeSyncError = result.message)
+                    if (result is HabiticaAPI.Result.Error) publishTopThreeError(result.message)
                 }
             } finally { taskMutex.unlock() }
         }
     }
 
-    private fun persistStore(s: TopThreeStore) {
+    private fun persistStore(s: TopThreeStore): Boolean {
         localRevision++
         // FIX2(D2): a failed save must surface; memory keeps advancing as before.
         val saved = store.saveTopThree(s)
         _state.value = _state.value.copy(store = s,
             persistenceError = if (saved) null else TOP_THREE_PERSIST_FAILED)
+        return saved
     }
 
     /** Creation has no idempotency token: never automatically retry an ambiguous response. */
@@ -1232,7 +1377,7 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
                         latest != null && latest == expected && _state.value.store.categoryNames.getOrNull(latest.second) == category) return true
                     val message = "原创建任务已移除、所属账号或完整快照已变化；本机待同步保留，请人工核对"
                     replaceTask(task.id) { if (it.cloudAccount == settings.cloudAccount()) it.copy(syncError = message) else it }
-                    _state.value = _state.value.copy(topThreeSyncError = message)
+                    publishTopThreeError(message)
                     return false
                 }
                 if (!unchanged(initial)) return@launch
@@ -1240,10 +1385,13 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
                 if (!isCurrentAccount(settings, generation)) return@launch
                 if (!unchanged(initial)) return@launch
                 if (tag !is HabiticaAPI.Result.Success || tag.value.isNullOrBlank()) {
-                    replaceTask(task.id) { it.copy(syncError = "分类 tag 同步失败；尚未创建 todo") }; return@launch
+                    // Blocked before any create was sent: there is no marker to strand, the task just stays pending.
+                    val notSent = (tag as? HabiticaAPI.Result.Error)?.takeIf { !it.dispatched }?.message
+                    replaceTask(task.id) { it.copy(syncError = notSent?.let { reason -> "$reason 尚未创建 todo，本机任务已保留。" } ?: "分类 tag 同步失败；尚未创建 todo") }
+                    return@launch
                 }
                 // Before creating, reconcile a unique exact owned record (e.g. POST succeeded but response was lost).
-                val cloud = HabiticaAPI.fetchTopThreeTodos(settings)
+                val cloud = habitica(settings) { HabiticaAPI.fetchTopThreeTodos(settings) }
                 if (!isCurrentAccount(settings, generation)) return@launch
                 if (!unchanged(initial)) return@launch
                 if (cloud is HabiticaAPI.Result.Error) { replaceTask(task.id) { it.copy(syncError = cloud.message) }; return@launch }
@@ -1252,7 +1400,7 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
                 if (currentTask.habiticaTaskId != null) { syncExistingTask(task.id); return@launch }
                 val hasAttempt = currentTask.pendingCreateTitle != null && currentTask.pendingCreateNotes != null
                 val matches = if (hasAttempt) (cloud as HabiticaAPI.Result.Success).value.distinctBy { it.id }.filter {
-                    it.title == currentTask.pendingCreateTitle && it.notes == currentTask.pendingCreateNotes
+                    it.title == currentTask.pendingCreateTitle && it.notes == currentTask.pendingCreateNotes && !_state.value.store.isTombstoned(it.id)
                 } else emptyList()
                 val candidates = if (hasAttempt) _state.value.store.pendingCreateCandidates(
                     currentTask.pendingCreateTitle!!, currentTask.pendingCreateNotes!!) else emptyList()
@@ -1268,10 +1416,26 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
                         val latestCategory = _state.value.store.categoryNames.getOrNull(latest.second) ?: return@launch
                         // The captured category/tag must still describe this UUID at the POST boundary.
                         if (latest.first != dateKey || latest.second != categoryIndex || latestCategory != category || latest.third.syncVersion != currentTask.syncVersion) return@launch
-                        replaceTask(task.id) { it.copy(pendingCreateTitle = latest.third.title, pendingCreateNotes = notes) }
+                        val saved = replaceTask(task.id) {
+                            it.copy(pendingCreateTitle = latest.third.title, pendingCreateNotes = notes)
+                        }
+                        if (!saved) {
+                            replaceTask(task.id) {
+                                it.copy(pendingCreateTitle = null, pendingCreateNotes = null,
+                                    syncError = "本机未能保存创建标记；修复存储后可重试")
+                            }
+                            return@launch
+                        }
                         bindingSnapshot = findTask(task.id) ?: return@launch
-                        HabiticaAPI.createTodo(settings, latest.third.title, notes, listOf(tag.value!!))
+                        habitica(settings) { HabiticaAPI.createTodo(settings, latest.third.title, notes, listOf(tag.value!!)) }
                     }
+                if (!hasAttempt && created is HabiticaAPI.Result.Error && created.definitelyNotCreated()) {
+                    // Never sent, or refused outright (401/429): nothing exists remotely. Release this attempt for its
+                    // original owner, even after an account switch, so a later manual sync can create it once.
+                    releaseRejectedCreate(settings.cloudAccount(), task.id, bindingSnapshot.third.pendingCreateTitle,
+                        bindingSnapshot.third.pendingCreateNotes, created.message)
+                    return@launch
+                }
                 if (!isCurrentAccount(settings, generation)) return@launch
                 if (created is HabiticaAPI.Result.Success && !created.value.isNullOrBlank()) {
                     val id = created.value!!
@@ -1296,8 +1460,34 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
                     replaceTask(task.id) { if (it.cloudAccount == settings.cloudAccount()) it.copy(habiticaTaskId = id, syncPending = true, pendingCreateTitle = null, pendingCreateNotes = null, syncVersion = it.syncVersion + 1) else it }
                     syncExistingTask(task.id)
                 } else replaceTask(task.id) { it.copy(syncError = "todo 创建结果未确认；本机保留，重试前会先核对云端以避免重复") }
-            } finally { creationIds -= task.id; creatingTasks-- }
+            } finally { creationIds -= task.id; creatingTasks--; rejectableDeletionMarkers.remove(task.id) }
         }
+    }
+
+    /**
+     * Clear only the exact attempt of this UUID in its owner's partition (active or parked), keep the row
+     * pending, and take back a removal marker that was added while this refused POST was in flight.
+     */
+    private fun releaseRejectedCreate(owner: String?, localId: String, title: String?, notes: String?, reason: String) {
+        val pendingRemoval = rejectableDeletionMarkers.remove(localId)
+        if (owner == null || title == null || notes == null) return
+        val attemptMarker = "$notes\n$title"
+        val message = "$reason 本机任务已保留，稍后可手动同步重试。"
+        fun release(partition: TopThreeStore): TopThreeStore {
+            val history = partition.history.mapValues { (_, day) -> day.copy(taskGroups = day.taskGroups.map { group -> group.map {
+                if (it.id == localId && it.cloudAccount == owner && it.habiticaTaskId == null &&
+                    it.pendingCreateTitle == title && it.pendingCreateNotes == notes)
+                    it.copy(pendingCreateTitle = null, pendingCreateNotes = null, syncPending = true, syncError = message) else it
+            } }) }
+            val ownRemoval = pendingRemoval == owner to attemptMarker && attemptMarker !in partition.deletedCloudIdMarkers.values
+            return partition.copy(history = history,
+                deletedCreateMarkers = if (ownRemoval) partition.deletedCreateMarkers - attemptMarker else partition.deletedCreateMarkers)
+        }
+        val s = _state.value.store
+        val next = if (s.cloudAccount == owner) release(s)
+            else s.accountStores[owner]?.let { s.copy(accountStores = s.accountStores + (owner to release(it))) } ?: return
+        if (next != s) persistStore(next)
+        if (s.cloudAccount == owner) publishTopThreeError(message)
     }
 
     fun todayKey(): String = store.logicalDateKey(_state.value.settings)
@@ -1307,8 +1497,8 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         /** 前 2 个分类（Work/MyOwn）固定槽位，与 Swift TopThreeManager.fixedSlotCategories 一致 */
-        private const val FIXED_SLOT_CATEGORIES = 2
-        private const val MAX_FIXED_TASKS = 3
+        private const val FIXED_SLOT_CATEGORIES = TOP_THREE_FIXED_SLOT_CATEGORIES
+        private const val MAX_FIXED_TASKS = TOP_THREE_MAX_FIXED_TASKS
         // FIX2(D2): user-visible persistence failure messages.
         private const val TOP_THREE_PERSIST_FAILED = "本地写入失败：Top3 任务数据未保存，重启后本次改动将丢失"
         private const val SETTINGS_PERSIST_FAILED = "本地写入失败：设置未保存，重启后将恢复旧设置"

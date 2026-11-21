@@ -39,7 +39,7 @@ final class PlantJournal: ObservableObject {
             days = saved
             PomodoroFileChanges.shared.consume(url, data: data)
             acknowledge()
-        } else if let data = UserDefaults.standard.data(forKey: backupKey),
+        } else if let data = PomodoroDataDir.backupDefaults?.data(forKey: backupKey),
                   let saved = try? JSONDecoder().decode([String: PlantDay].self, from: data) {
             days = saved
         } else {
@@ -111,7 +111,7 @@ final class PlantJournal: ObservableObject {
         PomodoroFileChanges.shared.noteLocalMutation(fileURL)
         do {
             let data = try JSONEncoder().encode(days)
-            UserDefaults.standard.set(data, forKey: backupKey)
+            PomodoroDataDir.backupDefaults?.set(data, forKey: backupKey)
             try data.write(to: fileURL, options: .atomic)
             PomodoroDataDir.noteLocalWrite(fileName, data: data)
             return true

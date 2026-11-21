@@ -14,6 +14,7 @@ import com.habitica.pomodoro.data.UserSettings
 import com.habitica.pomodoro.data.topThreeNotes
 import com.habitica.pomodoro.engine.PomodoroViewModel
 import org.json.JSONObject
+import kotlinx.coroutines.async
 import java.io.File
 import java.nio.file.Files
 import java.text.SimpleDateFormat
@@ -107,3 +108,47 @@ fun newVm(appDir: File, configureStub: () -> Unit = {}): PomodoroViewModel {
     configureStub()
     return PomodoroViewModel(TestApp(appDir))
 }
+
+// ---- v2.1.x sync helpers (budget clock, direct API calls, scripted replies) ----
+
+/** Deterministic monotonic clock for HabiticaRequestBudgets; install AFTER newVm's stub reset (e.g. in configureStub). */
+class ManualClock(var now: Double = 1_000.0) {
+    fun advance(seconds: Double) { now += seconds }
+}
+
+fun installManualClock(wallMillis: Long = 1_793_865_600_000L): ManualClock {
+    val clock = ManualClock()
+    com.habitica.pomodoro.data.HabiticaRequestBudgets.uptimeSeconds = { clock.now }
+    com.habitica.pomodoro.data.HabiticaRequestBudgets.wallClockMillis = { wallMillis }
+    return clock
+}
+
+fun fixtureSettings(uid: String = FIXTURE_UID, token: String = FIXTURE_TOKEN): UserSettings =
+    UserSettings(uid = uid, apiToken = token, connectHabitica = true)
+
+/** Start a suspend call on an Unconfined scope (runs synchronously until a stub hold suspends it). */
+fun <T> startCall(block: suspend () -> T): kotlinx.coroutines.Deferred<T> =
+    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined).async { block() }
+
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+fun <T> kotlinx.coroutines.Deferred<T>.done(what: String): T {
+    expect(isCompleted, "$what: call still in flight")
+    return getCompleted()
+}
+
+fun dispatched(prefix: String): Int = HabiticaAPI.calls.count { it.startsWith(prefix) }
+
+fun reply(status: Int, vararg headers: Pair<String, String>, body: String? = null) =
+    HabiticaAPI.StubReply(status, headers.toMap(), body)
+
+fun habitItem(id: String) = com.habitica.pomodoro.data.HabiticaTaskItem(id, id, "", 0.0, false, true, true, true)
+
+fun taskListBody(vararg items: Pair<String, String>): String =
+    org.json.JSONObject().put("data", org.json.JSONArray().apply {
+        items.forEach { (id, text) -> put(org.json.JSONObject().put("id", id).put("text", text)) }
+    }).toString()
+
+fun shiftedDay(day: String, offset: Long): String =
+    java.time.LocalDate.parse(day).plusDays(offset).toString()
+
+fun parityFixture(name: String): File = File(System.getProperty("pomo.fixture.repoRoot"), "parity/$name")

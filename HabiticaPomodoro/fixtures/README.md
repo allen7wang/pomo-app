@@ -15,6 +15,7 @@ python3 HabiticaPomodoro/fixtures/run.py
 python3 HabiticaPomodoro/fixtures/run.py --only file_monitor
 python3 HabiticaPomodoro/fixtures/run.py --only qishi_audio
 python3 HabiticaPomodoro/fixtures/run.py --only foreground_recovery --only dirty_reload
+python3 HabiticaPomodoro/fixtures/run.py --only topthree_merge --only topthree_merge_monitor
 python3 HabiticaPomodoro/fixtures/run.py --only habitica_rate_limit --only habitica_sync_budget
 python3 HabiticaPomodoro/fixtures/run.py --only habitica_create_recovery --only habitica_task_lists
 python3 HabiticaPomodoro/fixtures/run.py --only habitica_account_epoch --only habitica_response_order --only habitica_dispatch_reentry
@@ -51,10 +52,12 @@ and a final case count, exits nonzero on failure, and writes `results.json`.
 ## Real vs synthetic dependencies
 
 The centralized `SOURCE_NAMES` tuple in `run.py` lists the real production
-sources: `Managers.swift`, `HabiticaAPI.swift`, `PlantJournal.swift`,
+sources: file, settings, and sync managers, `HabiticaAPI.swift`, `PlantJournal.swift`,
 `PomodoroEngine.swift`, `BlockNotificationManager.swift`, `BlockRewardManager.swift`,
-and `FocusReview.swift`. They are copied **byte-for-byte**, never rewritten,
-and compiled with `-D DEBUG -swift-version 5`. Only the selected case is put into
+`FocusReview.swift`, and `TopThreeMerge.swift`. They are copied **byte-for-byte**, never rewritten,
+and compiled with `-D DEBUG -swift-version 5`. Cases reuse a compiled module
+within the same run when these snapshots match. Audio and foreground cases
+compile with their fixture SDK replacements in the same module. Each case is put into
 generated `main.swift`, after the runner's isolation preflight, so Swift's
 executable top-level rules are respected. Each executable is placed inside a
 fresh `Probe.app/Contents/MacOS/` layout with a unique executable name and
@@ -120,10 +123,25 @@ per-case commands.
   while bad JSON and synchronous subscriber/notification failed edits remain
   protected. Histogram same-path unsaved deltas are not considered discarded.
   The monitor's ordinary `consume`/scan path must not clear dirty ownership.
+- **`topthree_merge`** checks the pure Top3 merge rules on synthetic stores: both-side
+  additions, field-level newest-wins edits, delete-wins against edits and moves, rename plus
+  addition, concurrent renames and duplicate names, create-marker/tombstone/owner-partition
+  merging, old-format JSON, base selection by write clock, convergence (a merged file is adopted
+  without another rewrite), and one real `TopThreeManager` launch that merges a backup save the
+  disk never received. No network; Habitica stays disabled.
+- **`topthree_merge_monitor`** uses the real managers and seven-file monitor with the native
+  1.2-second read delay on the synthetic Top3 file. Probe-written "peer" revisions land while a
+  failed save keeps Top3 dirty, before a local save (the save is deferred, never overwrites the
+  unseen revision, and the merge is written after a background read), during an in-flight scan,
+  as a concurrent revision that never saw this device's last saves, and as an old-format rewrite.
+  It asserts no lost rows on either side, delete-wins, the UserDefaults backup, and main-run-loop
+  responsiveness. It does not exercise FileProvider/iCloud conflict handling itself.
 - **`focus_review`** checks the read-only aggregation using synthetic
   histogram, block, and plant records. It covers empty dates, DST, leap day,
-  year boundaries, legacy block data, explicit plant markers, and the daily
-  CSV schema. The case initializes no managers and makes no storage writes.
+  year boundaries, legacy block data, explicit plant markers, the daily
+  CSV schema and the shared export filename (macOS and iOS), and the earlier-window
+  paging used by iOS (fixed anchor across midnight, return to the rolling window).
+  The case initializes no managers and makes no storage writes.
 
 ## Isolation and limits
 

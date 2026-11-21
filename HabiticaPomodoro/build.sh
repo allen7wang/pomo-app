@@ -29,9 +29,9 @@ cd "$OUT/sources"
 # ── 1. Compile universal binary ──
 echo "1/6  Compiling universal binary (arm64 + x86_64)..."
 swiftc -sdk "$SDK" -target arm64-apple-macos13.0 \
-    -emit-executable -o "$OUT/arm64" *.swift
+    -whole-module-optimization -emit-executable -o "$OUT/arm64" *.swift
 swiftc -sdk "$SDK" -target x86_64-apple-macos13.0 \
-    -emit-executable -o "$OUT/x86_64" *.swift
+    -whole-module-optimization -emit-executable -o "$OUT/x86_64" *.swift
 lipo -create -output "$OUT/HabiticaPomodoro" "$OUT/arm64" "$OUT/x86_64"
 rm "$OUT/arm64" "$OUT/x86_64"
 echo "      ✅ Universal: $(lipo -archs "$OUT/HabiticaPomodoro")"

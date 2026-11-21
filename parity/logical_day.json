@@ -1,0 +1,82 @@
+[
+  {
+    "name": "default-before",
+    "zone": "Asia/Shanghai",
+    "instant": "2024-03-11T19:59:00Z",
+    "boundaryMinutes": 240,
+    "logicalDay": "2024-03-11",
+    "calendarDay": "2024-03-12"
+  },
+  {
+    "name": "default-exact",
+    "zone": "Asia/Shanghai",
+    "instant": "2024-03-11T20:00:00Z",
+    "boundaryMinutes": 240,
+    "logicalDay": "2024-03-12",
+    "calendarDay": "2024-03-12"
+  },
+  {
+    "name": "year-rollover",
+    "zone": "Asia/Shanghai",
+    "instant": "2023-12-31T16:00:00Z",
+    "boundaryMinutes": 240,
+    "logicalDay": "2023-12-31",
+    "calendarDay": "2024-01-01"
+  },
+  {
+    "name": "midnight-boundary",
+    "zone": "Asia/Shanghai",
+    "instant": "2023-12-31T16:00:00Z",
+    "boundaryMinutes": 0,
+    "logicalDay": "2024-01-01",
+    "calendarDay": "2024-01-01"
+  },
+  {
+    "name": "late-boundary",
+    "zone": "America/Los_Angeles",
+    "instant": "2024-03-01T06:59:00Z",
+    "boundaryMinutes": 1380,
+    "logicalDay": "2024-02-28",
+    "calendarDay": "2024-02-29"
+  },
+  {
+    "name": "late-boundary-exact",
+    "zone": "America/Los_Angeles",
+    "instant": "2024-03-01T07:00:00Z",
+    "boundaryMinutes": 1380,
+    "logicalDay": "2024-02-29",
+    "calendarDay": "2024-02-29"
+  },
+  {
+    "name": "spring-after-gap",
+    "zone": "America/Los_Angeles",
+    "instant": "2024-03-10T10:30:00Z",
+    "boundaryMinutes": 240,
+    "logicalDay": "2024-03-09",
+    "calendarDay": "2024-03-10"
+  },
+  {
+    "name": "spring-custom-exact",
+    "zone": "America/Los_Angeles",
+    "instant": "2024-03-10T12:30:00Z",
+    "boundaryMinutes": 330,
+    "logicalDay": "2024-03-10",
+    "calendarDay": "2024-03-10"
+  },
+  {
+    "name": "fall-first-0130",
+    "zone": "America/Los_Angeles",
+    "instant": "2024-11-03T08:30:00Z",
+    "boundaryMinutes": 120,
+    "logicalDay": "2024-11-02",
+    "calendarDay": "2024-11-03"
+  },
+  {
+    "name": "fall-second-0130",
+    "zone": "America/Los_Angeles",
+    "instant": "2024-11-03T09:30:00Z",
+    "boundaryMinutes": 120,
+    "logicalDay": "2024-11-02",
+    "calendarDay": "2024-11-03"
+  }
+]

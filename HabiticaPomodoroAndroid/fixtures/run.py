@@ -2,10 +2,12 @@
 """Offline fixture harness for HabiticaPomodoroAndroid.
 
 Compiles the real production sources (data/Models.kt, data/BlockModels.kt,
-data/TopThreeCloudSync.kt, data/LocalStore.kt, engine/PomodoroViewModel.kt)
+data/TopThreeCloudSync.kt, data/HabiticaRequestBudget.kt, data/HabiticaGate.kt,
+data/UnfinishedTasks.kt, data/LocalStore.kt, data/FocusReview.kt,
+engine/PomodoroViewModel.kt)
 against stub plumbing (android/androidx/services/HabiticaAPI substitutes, see
-stubs/) with kotlin-compiler-embeddable, then compiles and runs every case in
-cases/ one by one, printing `CASE <name> EXIT=<code>` per case.
+stubs/) with kotlin-compiler-embeddable, then compiles the cases together and
+runs each in its own JVM, printing `CASE <name> EXIT=<code>` per case.
 
 No network at run time: the HabiticaAPI stub is a pure in-memory substitute
 (HTTP 0 by construction). The toolchain jars are resolved from, in order:
@@ -64,7 +66,11 @@ PROD_SOURCES = [
     os.path.join(SRC, "data", "Models.kt"),
     os.path.join(SRC, "data", "BlockModels.kt"),
     os.path.join(SRC, "data", "TopThreeCloudSync.kt"),
+    os.path.join(SRC, "data", "HabiticaRequestBudget.kt"),
+    os.path.join(SRC, "data", "HabiticaGate.kt"),
+    os.path.join(SRC, "data", "UnfinishedTasks.kt"),
     os.path.join(SRC, "data", "LocalStore.kt"),
+    os.path.join(SRC, "data", "FocusReview.kt"),
     os.path.join(SRC, "engine", "PomodoroViewModel.kt"),
 ]
 # Substituted plumbing: these production files are deliberately NOT compiled.
@@ -219,19 +225,32 @@ def main():
         if missing:
             print("WARNING: unknown case(s): %s" % ", ".join(sorted(missing)))
 
+    if not selected:
+        return 2
+
+    batch_out = os.path.join(work, "cases", "batch")
+    batch_log = os.path.join(work, "logs", "cases-compile.log")
+    shutil.rmtree(batch_out, ignore_errors=True)
+    cases_cp = compile_cp + [prod_out, support_out]
+    batch = kotlinc(java, compiler_cp, cases_cp, batch_out, [path for _, path in selected], batch_log)
     results = []
     for name, path in selected:
         log = os.path.join(work, "logs", name + ".log")
-        out = os.path.join(work, "cases", name)
-        shutil.rmtree(out, ignore_errors=True)
-        proc = kotlinc(java, compiler_cp, compile_cp + [prod_out, support_out],
-                       out, [path], log)
-        if proc.returncode != 0:
-            # Compile failure is a legitimate RED for cases targeting new API.
-            results.append((name, 1))
-            print("CASE %s EXIT=1  (compile failure — see %s)" % (name, log))
-            continue
+        out = batch_out
+        if batch.returncode != 0:
+            # Retain individual RED reporting when one of the cases cannot compile.
+            out = os.path.join(work, "cases", name)
+            shutil.rmtree(out, ignore_errors=True)
+            proc = kotlinc(java, compiler_cp, cases_cp, out, [path], log)
+            if proc.returncode != 0:
+                results.append((name, 1))
+                print("CASE %s EXIT=1  (compile failure — see %s)" % (name, log))
+                continue
+        else:
+            with open(log, "w") as lf:
+                lf.write("Compiled in " + batch_log + "\n")
         runcmd = [java, "-Djava.io.tmpdir=" + os.path.join(work, "tmp"),
+                  "-Dpomo.fixture.repoRoot=" + os.path.dirname(os.path.dirname(HERE)),
                   "-cp", os.pathsep.join(run_cp_base + [out]), name[0].upper() + name[1:] + "Kt"]
         with open(log, "a") as lf:
             lf.write("\n== run ==\nCMD: %s\n" % " ".join(runcmd))

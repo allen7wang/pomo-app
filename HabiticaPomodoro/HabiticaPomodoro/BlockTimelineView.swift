@@ -8,6 +8,7 @@ extension Notification.Name {
 
 // MARK: - Block Timeline View (可视化时间轴)
 struct BlockTimelineView: View {
+    @Environment(\.appTheme) private var theme
     @ObservedObject var settingsManager = SettingsManager.shared
     @State private var draggedBlock: Int?
     @State private var selectedBlockIndex: Int = 0
@@ -16,8 +17,9 @@ struct BlockTimelineView: View {
         VStack(spacing: 12) {
             HStack {
                 Text("Block Timeline")
-                    .font(.headline)
-                    .foregroundColor(.primary)
+                    .font(theme.sectionFont(size: 13))
+                    .foregroundColor(theme.ink)
+                    .accessibilityAddTraits(.isHeader)
                 
                 Spacer()
                 
@@ -26,13 +28,11 @@ struct BlockTimelineView: View {
                     NotificationCenter.default.post(name: .scrollToCurrentBlock, object: nil)
                 }) {
                     HStack(spacing: 4) {
-                        Image(systemName: "location.fill")
+                        Image(systemName: "location.fill").foregroundColor(theme.accent)
                         Text("Current")
                     }
-                    .font(.caption)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .buttonStyle(QuietButtonStyle(theme: theme, height: 26, fontSize: 11))
             }
             
             // Horizontal timeline
@@ -50,9 +50,10 @@ struct BlockTimelineView: View {
                             .id("block_\(blockIndex)")
                         }
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 6)
                 }
-                .frame(height: 180)
+                .frame(height: 186)
                 .onAppear {
                     // Initial scroll to current block
                     let currentBlockIdx = BlockProgressManager.shared.blockProgress.currentBlockIndex
@@ -69,7 +70,7 @@ struct BlockTimelineView: View {
     }
     
     private func showTaskEditorWindow(blockIndex: Int) {
-        let contentView = BlockTaskEditorView(blockIndex: blockIndex)
+        let contentView = BlockTaskEditorView(blockIndex: blockIndex).appSkin()
         let hostingController = NSHostingController(rootView: contentView)
         let window = NSWindow(contentViewController: hostingController)
         window.title = "Block \(blockIndex + 1) Tasks"
@@ -111,8 +112,10 @@ struct BlockCardView: View {
     let onDrop: (Int) -> Void
     let onTap: () -> Void
     
+    @Environment(\.appTheme) private var theme
     @ObservedObject var settingsManager = SettingsManager.shared
     @ObservedObject var blockManager = BlockProgressManager.shared
+    @State private var hovering = false
     
     var body: some View {
         let timeRange = blockIndex < settingsManager.settings.blockTimeRanges.count 
@@ -128,47 +131,54 @@ struct BlockCardView: View {
         let completed = blockIndex < progress.count ? progress[blockIndex] : 0
         let total = settingsManager.settings.blockPomoCount
         let isCurrent = blockManager.blockProgress.currentBlockIndex == blockIndex
+        // Current block inverts to the accent; every label then reads in onAccent.
+        let ink = isCurrent ? theme.onAccent : theme.ink
+        let muted = isCurrent ? theme.onAccent.opacity(0.8) : theme.muted
         
-        return VStack(spacing: 6) {
+        return VStack(alignment: .leading, spacing: 7) {
             // Block header
             HStack(spacing: 6) {
                 Text("B\(blockIndex + 1)")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(isCurrent ? .white : .primary)
+                    .font(theme.numberFont(size: 12, weight: .semibold))
+                    .foregroundColor(ink)
                 
                 if let range = timeRange {
                     Text(range.displayString)
-                        .font(.caption2)
-                        .foregroundColor(isCurrent ? .white.opacity(0.8) : .secondary)
+                        .font(theme.numberFont(size: 10, weight: .regular))
+                        .foregroundColor(muted)
                 }
+                Spacer(minLength: 0)
             }
             
             // Progress bar
-            ProgressView(value: Double(completed), total: Double(total))
-                .progressViewStyle(LinearProgressViewStyle(tint: completed >= total ? .green : .orange))
-                .controlSize(.small)
+            HStack(spacing: 6) {
+                SkinProgressBar(value: Double(completed), total: Double(max(total, 1)),
+                                tint: isCurrent ? theme.onAccent : theme.accent)
+                Text("\(completed)/\(total)")
+                    .font(theme.numberFont(size: 10))
+                    .foregroundColor(completed >= total ? ink : muted)
+            }
             
             // Goal
             if !goal.isEmpty {
                 Text(goal)
-                    .font(.caption2)
-                    .foregroundColor(isCurrent ? .white.opacity(0.9) : .primary)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(ink)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
             
             // Tasks list (show first 2 tasks, or all if few)
             if !tasks.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     ForEach(Array(tasks.prefix(2)), id: \.id) { task in
                         HStack(spacing: 4) {
-                            Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                            Image(systemName: theme.checkSymbol(task.isCompleted))
                                 .font(.system(size: 8))
-                                .foregroundColor(task.isCompleted ? .green : (isCurrent ? .white.opacity(0.6) : .secondary))
+                                .foregroundColor(task.isCompleted ? (isCurrent ? theme.onAccent : theme.accent) : muted)
                             Text(task.title)
-                                .font(.caption2)
-                                .foregroundColor(isCurrent ? .white : .primary)
+                                .font(.system(size: 10))
+                                .foregroundColor(ink)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                         }
@@ -176,50 +186,48 @@ struct BlockCardView: View {
                     
                     if tasks.count > 2 {
                         Text("+\(tasks.count - 2) more")
-                            .font(.caption2)
-                            .foregroundColor(isCurrent ? .white.opacity(0.6) : .secondary)
+                            .font(.system(size: 10))
+                            .foregroundColor(muted)
                     }
                 }
             }
             
+            Spacer(minLength: 0)
+
             // Tasks count
             if !tasks.isEmpty {
                 Text("\(tasks.filter { $0.isCompleted }.count)/\(tasks.count)")
-                    .font(.caption2)
-                    .foregroundColor(isCurrent ? .white.opacity(0.8) : .secondary)
+                    .font(theme.numberFont(size: 10, weight: .regular))
+                    .foregroundColor(muted)
             }
         }
         .padding(10)
-        .frame(width: 130, height: 170)
-        .background(isCurrent ? Color.orange : Color(NSColor.controlBackgroundColor))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(isDragging ? 0.2 : 0.05), radius: isDragging ? 8 : 4)
-        .scaleEffect(isDragging ? 1.05 : 1.0)
+        .frame(width: 130, height: 170, alignment: .topLeading)
+        .background(
+            SkinSurface(theme: theme, fill: isCurrent ? theme.accent : theme.surface,
+                        radius: min(theme.cardRadius, 14),
+                        stroke: isCurrent ? (theme.squareCorners ? theme.ink : nil) : (theme.cardStroke ?? theme.line),
+                        strokeWidth: max(1, theme.borderWidth))
+        )
+        .overlay(theme.cardShape.fill(theme.ink.opacity(hovering && !isCurrent ? 0.03 : 0)).allowsHitTesting(false))
+        .scaleEffect(isDragging ? 1.04 : 1.0)
         .animation(.easeInOut(duration: 0.2), value: isCurrent)
         .animation(.easeInOut(duration: 0.2), value: isDragging)
+        .onHover { hovering = $0 }
         .onTapGesture(perform: onTap)
         .onDrag {
             onDrag()
             return NSItemProvider(object: "block_\(blockIndex)" as NSString)
         }
-    }
-}
-
-// MARK: - Block Card Preview (拖拽预览)
-struct BlockCardPreview: View {
-    let blockIndex: Int
-    
-    var body: some View {
-        Text("B\(blockIndex + 1)")
-            .font(.caption)
-            .padding()
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(8)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .help("编辑 B\(blockIndex + 1) 的任务")
     }
 }
 
 // MARK: - Block Task Editor View (块任务编辑器)
 struct BlockTaskEditorView: View {
+    @Environment(\.appTheme) private var theme
     @ObservedObject var settingsManager = SettingsManager.shared
     let blockIndex: Int
     
@@ -237,7 +245,8 @@ struct BlockTaskEditorView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Block \(blockIndex + 1)")
-                        .font(.headline)
+                        .font(theme.titleFont(size: 17))
+                        .foregroundColor(theme.ink)
                     
                     TextField("Block Goal", text: Binding(
                         get: { blockIndex < settingsManager.settings.blockGoals.count ? settingsManager.settings.blockGoals[blockIndex] : "" },
@@ -259,21 +268,22 @@ struct BlockTaskEditorView: View {
                         window.close()
                     }
                 }
+                .buttonStyle(QuietButtonStyle(theme: theme, height: 28))
             }
             
-            Divider()
+            Rectangle().fill(theme.line).frame(height: 1)
             
             // Tasks list
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Tasks")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(theme.sectionFont(size: 13))
+                        .foregroundColor(theme.ink)
                     Spacer()
                     if !tasks.isEmpty {
                         Text("\(tasks.filter { $0.isCompleted }.count)/\(tasks.count) completed")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(theme.numberFont(size: 11, weight: .regular))
+                            .foregroundColor(theme.muted)
                     }
                 }
                 
@@ -284,17 +294,18 @@ struct BlockTaskEditorView: View {
                                 Button(action: {
                                     toggleTask(task: task)
                                 }) {
-                                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                                    Image(systemName: theme.checkSymbol(task.isCompleted))
                                         .font(.title3)
-                                        .foregroundColor(task.isCompleted ? .green : .secondary)
+                                        .foregroundColor(task.isCompleted ? theme.accent : theme.muted)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel(task.isCompleted ? "取消完成" : "完成")
                                 
                                 TextField("Task title", text: taskBinding(task.id, \.title, fallback: task.title))
                                     .textFieldStyle(.roundedBorder)
                                     .font(.body)
                                     .strikethrough(task.isCompleted)
-                                    .foregroundColor(task.isCompleted ? .secondary : .primary)
+                                    .foregroundColor(task.isCompleted ? theme.muted : theme.ink)
                                 
                                 Spacer()
                                 
@@ -307,9 +318,10 @@ struct BlockTaskEditorView: View {
                                 }) {
                                     Image(systemName: "trash")
                                         .font(.caption)
-                                        .foregroundColor(.red)
+                                        .foregroundColor(theme.danger)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel("删除任务")
                             }
                             .padding(.vertical, 4)
                         }
@@ -317,14 +329,13 @@ struct BlockTaskEditorView: View {
                 }
                 .frame(maxHeight: 400)
             }
-            
-            Divider()
+            .themeCard(theme, padding: theme.cardPadding)
             
             // Add new task
             VStack(alignment: .leading, spacing: 4) {
                 Text("Add New Task")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(theme.sectionFont(size: 13))
+                    .foregroundColor(theme.ink)
                 
                 HStack(spacing: 8) {
                     TextField("Task title", text: $newTaskTitle)
@@ -333,16 +344,19 @@ struct BlockTaskEditorView: View {
                     Stepper("\(newTaskPomo)p", value: $newTaskPomo, in: 1...12)
                     
                     Button(action: addTask) {
-                        Image(systemName: "plus.circle.fill")
+                        Image(systemName: theme.squareCorners ? "plus.square.fill" : "plus.circle.fill")
                             .font(.title2)
-                            .foregroundColor(.green)
+                            .foregroundColor(theme.accent)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("添加任务")
                 }
             }
+            .themeCard(theme, padding: theme.cardPadding)
         }
         .padding()
         .frame(minWidth: 500, minHeight: 600)
+        .background(theme.pageBackground)
         .confirmationDialog("删除这条块任务？", isPresented: Binding(
             get: { taskToDelete != nil }, set: { if !$0 { taskToDelete = nil } }
         )) {

@@ -13,16 +13,23 @@
 | Apple 离线回归 | [Apple fixtures](HabiticaPomodoro/fixtures/README.md) |
 | Android 离线回归 | [Android fixtures](HabiticaPomodoroAndroid/fixtures/README.md) |
 
+## 当前源码
+
+- 三端共用七套皮肤。清新原生、留白花园与效率工作台更新了配色、排版、卡片和计时环，新增番茄经典、深夜航行、像素冒险与樱落。
+- iOS 与 Android 补齐专注复盘和 CSV，Android 同时补齐跨天未完成任务与 Habitica 请求保护。iOS 新增锁屏实时活动和主屏「今日任务」小组件。
+- Mac 与 iPhone 合并同一目录中可见的 Top 3 并发修订，保留不同任务的新增和同一任务不同字段的修改。其它文件采用各自原有的保存规则。
+- 共享日界与复盘场景见 [跨平台业务回归](parity/README.md)，构建、同步及设备验收状态见 [功能验收清单](HabiticaPomodoro/FEATURE_PARITY.md)。
+
 ## 版本与同步边界
 
-- **[macOS v2.1.4](https://github.com/allen7wang/Habitica-Pomodoro-SiteKeeper/releases/tag/v2.1.4)**：修复并发响应清除新错误、旧角色响应恢复失效认证，以及账号切回后复用旧读取的问题；切换连接期间保留已发送写操作的真实结果和原账号限额。主程序与今日任务小组件均为 build 18，详见[更新说明](HabiticaPomodoro/releases/v2.1.4.md)。
-- **[macOS v2.1.3](https://github.com/allen7wang/Habitica-Pomodoro-SiteKeeper/releases/tag/v2.1.3)**：修复新建任务被本地额度、HTTP 401/429 拒绝后无法再次上传的问题；习惯与每日任务遇到异常响应时保留已加载列表。主程序与今日任务小组件均为 build 17，详见[更新说明](HabiticaPomodoro/releases/v2.1.3.md)。
-- **[macOS v2.1.2](https://github.com/allen7wang/Habitica-Pomodoro-SiteKeeper/releases/tag/v2.1.2)**：Habitica 各功能共享请求额度，遇到限流时提示等待；已确认的删除不再重复请求，离线待同步任务与删除进度保留。主程序与今日任务小组件均为 build 16，详见[更新说明](HabiticaPomodoro/releases/v2.1.2.md)。
+- **[macOS v2.1.4](https://github.com/allen7wang/pomo-app/releases/tag/v2.1.4)**：修复并发响应清除新错误、旧角色响应恢复失效认证，以及账号切回后复用旧读取的问题；切换连接期间保留已发送写操作的真实结果和原账号限额。主程序与今日任务小组件均为 build 18，详见[更新说明](HabiticaPomodoro/releases/v2.1.4.md)。
+- **[macOS v2.1.3](https://github.com/allen7wang/pomo-app/releases/tag/v2.1.3)**：修复新建任务被本地额度、HTTP 401/429 拒绝后无法再次上传的问题；习惯与每日任务遇到异常响应时保留已加载列表。主程序与今日任务小组件均为 build 17，详见[更新说明](HabiticaPomodoro/releases/v2.1.3.md)。
+- **[macOS v2.1.2](https://github.com/allen7wang/pomo-app/releases/tag/v2.1.2)**：Habitica 各功能共享请求额度，遇到限流时提示等待；已确认的删除不再重复请求，离线待同步任务与删除进度保留。主程序与今日任务小组件均为 build 16，详见[更新说明](HabiticaPomodoro/releases/v2.1.2.md)。
 - **macOS v2.1.1**：任务页将今天、昨天放在上方，未完成任务放在下方；效率工作台保留今天/昨天并排布局。
 - **macOS v2.1.0**：任务页新增「未完成任务」，收集昨天及更早仍未完成的任务，可删除或转到今天的原分类。
 - **macOS v2.0.1**：启动时先显示窗口，再读取「文稿」中的记录。读取失败可重试。复盘默认展示最近有记录的一天，跨午夜翻阅时保留当前日期区间。
 - **macOS v2.0.0**：新增「专注复盘」，可回看近 7、30、90 天及更早的日期，查看番茄次数、专注时长、时间块进度与种植记录，并导出当前日期范围的 CSV。复盘直接读取已有记录。
-- 2026-10-28 发布 **[macOS v1.2.7](https://github.com/allen7wang/Habitica-Pomodoro-SiteKeeper/releases/tag/v1.2.7)**：任务、习惯、每日、角色四页补齐三套皮肤（清新原生 / 留白花园 / 效率工作台）及深浅色适配，统一卡片与操作控件，修复花园风格的滚动和留白。通过主窗口右上角调色板或 设置 → 外观 切换。iOS / Android 仍为 v1.2.5。
+- 2026-10-28 发布 **[macOS v1.2.7](https://github.com/allen7wang/pomo-app/releases/tag/v1.2.7)**：任务、习惯、每日、角色四页补齐三套皮肤（清新原生 / 留白花园 / 效率工作台）及深浅色适配，统一卡片与操作控件，修复花园风格的滚动和留白。通过主窗口右上角调色板或 设置 → 外观 切换。iOS / Android 仍为 v1.2.5。
 - v1.2.5 已包含云文件读取防卡顿、Apple 暂停/试听资源隔离、前台到期补记顺序修复及 CI/离线回归改进；macOS v1.2.6 / v1.2.7 在其基础上只改展示层。
 - Mac/iPhone 授权同一 iCloud Drive 父目录后共享 JSON；Android 只经 Habitica 交换带应用日期/分类标记的 Task，设置与历史不做三端云同步。
 - 首次使用自行配置 Habitica 凭据；不配置也可离线使用。发布物不应携带个人账号或运行数据。

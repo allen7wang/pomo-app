@@ -110,7 +110,7 @@ write("habitica_pomodoro_settings.json", remote)
 sync()
 check(settings.settings.pomoDurationMins == 31, "remote settings reload on main")
 check(delayedReadCount() > readsBeforeSlowScan, "native slow read was actually injected")
-check(beats > 0 && maxGap < 0.3, "slow disk leaves main responsive")
+check(beats > 0 && maxGap < fixtureMaxMainGap, "slow disk leaves main responsive")
 let beforeUnchanged = publications
 sync()
 check(publications == beforeUnchanged, "unchanged bytes do not republish")
@@ -245,6 +245,6 @@ reentrantSubscription.cancel()
 subscription.cancel()
 heartbeat.invalidate()
 // The heartbeat stays active through races, corruption, dirty saves and reentry.
-check(maxGap < 0.3, "all delayed-read scenarios leave the main run loop responsive")
+check(maxGap < fixtureMaxMainGap, "all delayed-read scenarios leave the main run loop responsive")
 print(String(format: "FILE_MONITOR_SUITE PASS assertions=%d main_max_gap=%.3fs beats=%d delayed_reads=%llu",
              passedAssertions, maxGap, beats, delayedReadCount()))

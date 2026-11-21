@@ -59,7 +59,7 @@ private struct MacDataGate<Content: View>: View {
                     .foregroundStyle(theme.accent)
                     .accessibilityHidden(true)
                 Text(failed ? "暂时无法读取记录" : "正在读取专注记录")
-                    .font(.title3.weight(.semibold))
+                    .font(theme.titleFont(size: 17))
                     .foregroundStyle(theme.ink)
                 Text(failed
                      ? "请检查 Habitica Pomodoro 的「文稿」访问权限和 iCloud Drive 状态，然后重试。"
@@ -76,7 +76,8 @@ private struct MacDataGate<Content: View>: View {
             .padding(24)
             .frame(minWidth: 360, minHeight: 240)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(theme.background)
+            .background(theme.pageBackground)
+            .tint(theme.accent)
         }
     }
 }
@@ -113,6 +114,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             button.target = self
         }
 
+        UIStyleStore.shared.applyForcedAppearance()
         showTimerWindow()
         loadStartupData()
     }
@@ -309,18 +311,20 @@ struct TimerView: View {
     @State var showBlocksSheet = false
 
     var body: some View {
+        let theme = self.theme
         Group {
-            switch styleStore.style {
-            case .mint: mintLayout
-            case .garden: gardenLayout
-            case .studio: studioLayout
+            switch theme.layout {
+            case .compact: compactLayout
+            case .airy: airyLayout
+            case .columns: columnsLayout
             }
         }
-        .frame(width: styleStore.style.windowSize.width,
-               height: styleStore.style.windowSize.height)
+        .frame(width: theme.macWindowSize.width,
+               height: theme.macWindowSize.height)
         .environment(\.appTheme, theme)
-        .background(theme.background)
-        .background(WindowSizeConfigurator(size: styleStore.style.windowSize))
+        .tint(theme.accent)
+        .background(theme.pageBackground)
+        .background(WindowSizeConfigurator(size: theme.macWindowSize))
         .confirmationDialog("放弃当前番茄？时间块中的植物将记为枯萎。",
                             isPresented: $showAbandonConfirm, titleVisibility: .visible) {
             Button("放弃番茄", role: .destructive) {
@@ -329,161 +333,6 @@ struct TimerView: View {
             Button("取消", role: .cancel) {}
         }
         .sheet(isPresented: $showBlocksSheet) { blocksSheet }
-    }
-
-    // MARK: - Pomo Tab（番茄钟相关）
-    var pomoTab: some View {
-        ScrollView {
-        VStack(spacing: 12) {
-            // Tomato / status circle
-            ZStack {
-                Circle()
-                    .fill(tomatoColor)
-                    .frame(width: 110, height: 110)
-                    .shadow(radius: 4)
-
-                VStack {
-                    Text(engine.timerString)
-                        .font(.system(.title, design: .monospaced).bold())
-                        .foregroundColor(.white)
-
-                    if engine.settings.enableBlockMode {
-                        // Block mode: show current block progress (based on time)
-                        CurrentBlockProgressView()
-                            .environmentObject(engine)
-                    } else {
-                        // Regular mode progress
-                        Text("\(engine.pomoSetCounter)/\(engine.settings.pomoSetNum)")
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                }
-            }
-            .onTapGesture { engine.togglePomodoro() }
-            .padding(.top, 12)
-
-            // Today count
-            HStack(spacing: 4) {
-                Image(systemName: "checkmark.circle")
-                    .foregroundColor(.green)
-                Text("Today: \(engine.todayPomodoros) pomodoros")
-                    .font(.subheadline)
-            }
-
-            // Block mode: show all blocks with progress circles
-            if engine.settings.enableBlockMode {
-                BlockTimeBlockView()
-                    .environmentObject(engine)
-                
-                Divider()
-                
-                // 方案B: 可视化时间轴
-                BlockTimelineView()
-                    .frame(height: 216)
-            }
-
-            // Action buttons row
-            HStack(spacing: 12) {
-                if engine.phase == .pomodoro {
-                    Button(action: { engine.skipToBreak() }) {
-                        Image(systemName: "forward.fill")
-                            .font(.title3)
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Skip to break")
-                }
-
-                if engine.isRunning || engine.isFrozen {
-                    Button(action: {
-                        engine.isFrozen ? engine.unfreeze() : engine.freeze()
-                    }) {
-                        Image(systemName: engine.isFrozen ? "play.fill" : "pause.fill")
-                            .font(.title3)
-                    }
-                    .buttonStyle(.borderless)
-                    .help(engine.isFrozen ? "Resume" : "Pause")
-                }
-
-                if engine.phase == .pomodoro {
-                    Button(action: { showAbandonConfirm = true }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title3)
-                            .foregroundColor(.red)
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Abandon pomodoro")
-                } else if engine.phase == .breakTime || engine.phase == .breakExtension {
-                    Button(action: { engine.reset() }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title3)
-                            .foregroundColor(.red)
-                    }
-                    .buttonStyle(.borderless)
-                    .help("End session")
-                }
-            }
-            .frame(height: 24)
-
-            // Habitica stats
-            if engine.settings.connectHabitica {
-                Divider()
-                HStack(spacing: 16) {
-                    Label("\(String(format: "%.1f", engine.habiticaMonies))", systemImage: "dollarsign.circle.fill")
-                        .foregroundColor(.yellow)
-                    Label("\(String(format: "%.0f", engine.habiticaExp))", systemImage: "star.fill")
-                        .foregroundColor(.purple)
-                    Label("\(String(format: "%.0f", engine.habiticaHp))", systemImage: "heart.fill")
-                        .foregroundColor(.red)
-                    Button(action: {
-                        Task { await engine.refreshHabitica() }
-                    }) {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Refresh")
-                }
-                .font(.subheadline)
-            }
-
-            // Quick settings link
-            HStack(spacing: 12) {
-                Button("Settings") {
-                    showSettings()
-                }
-                Button("专注复盘") {
-                    showFocusReview()
-                }
-                Menu("休息") {
-                    ForEach([1, 5, 15, 30], id: \.self) { minutes in
-                        Button("\(minutes) 分钟") { engine.takeBreak(duration: minutes) }
-                    }
-                }
-                .disabled(engine.phase != .idle || engine.isRunning || engine.isFrozen)
-            }
-            .font(.subheadline)
-
-            Spacer()
-        }
-        .padding(24)
-        }
-    }
-
-    // MARK: - Task Tab（最重要的三件事）
-    var taskTab: some View {
-        TopThreeView()
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
-    }
-
-    var tomatoColor: Color {
-        switch engine.tomatoState {
-        case .wait:      return Color(red: 0.55, green: 0.81, blue: 0.95)
-        case .progress:  return Color.green
-        case .freeze:    return Color(red: 0.70, green: 0.78, blue: 0.86)
-        case .breakTime: return Color(red: 0.42, green: 0.58, blue: 0.84)
-        case .win:      return Color.green
-        case .warning:   return Color.red
-        }
     }
 
     func showSettings() {
@@ -512,8 +361,11 @@ struct SettingsView: View {
     @ObservedObject var am = AudioManager.shared
     @ObservedObject private var blockManager = BlockProgressManager.shared
     @ObservedObject private var styleStore = UIStyleStore.shared
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showResetBlockConfirm = false
     @State private var showClearBlocksConfirm = false
+
+    private var theme: AppTheme { AppTheme(style: styleStore.style, dark: colorScheme == .dark) }
 
     var body: some View {
         TabView {
@@ -524,6 +376,9 @@ struct SettingsView: View {
             dataSettingsTab.tabItem { Label("Data", systemImage: "doc") }
         }
         .frame(width: 530, height: 630)
+        .environment(\.appTheme, theme)
+        .tint(theme.accent)
+        .onAppear { styleStore.applyForcedAppearance() }
         .onDisappear { am.stopPreview() }
         .onChange(of: sm.settings.ambientSource) { _ in am.stopPreview() }
         .confirmationDialog("重置当前块的完成数？历史种植记录保留。",
@@ -540,222 +395,268 @@ struct SettingsView: View {
         }
     }
 
-    var timerSettingsTab: some View {
+    // MARK: Page furniture
+
+    private func settingsPage<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                Group {
-                    Text("Pomodoro Settings").font(.headline)
-                    stepperRow("Pomodoro duration", value: $sm.settings.pomoDurationMins, range: 1...120, suffix: "min")
-                    stepperRow("Short break", value: $sm.settings.breakDuration, range: 1...60, suffix: "min")
-                    stepperRow("Break extension", value: $sm.settings.breakExtention, range: 0...30, suffix: "min")
-                    stepperRow("Long break", value: $sm.settings.longBreakDuration, range: 1...120, suffix: "min")
-                    stepperRow("Long break after", value: $sm.settings.pomoSetNum, range: 1...12, suffix: "pomodoros")
-                }
-                Divider()
-                Group {
-                    Toggle("Start breaks manually", isOn: $sm.settings.manualBreak)
-                    Toggle("Reset timer after break extension", isOn: $sm.settings.resetPomoAfterBreak)
-                }
-                Divider()
-                Group {
-                    Text("Sounds").font(.headline)
-                    pickerRow("Pomodoro end sound", selection: $sm.settings.pomoEndSound, options: AudioManager.allSoundOptions)
-                    sliderRow("Volume", value: $sm.settings.pomoEndSoundVolume)
-                    pickerRow("Break end sound", selection: $sm.settings.breakEndSound, options: AudioManager.allSoundOptions)
-                    sliderRow("Volume", value: $sm.settings.breakEndSoundVolume)
-                    HStack {
-                        Text("Ambient source")
-                        Spacer()
-                        Picker("", selection: $sm.settings.ambientSource) {
-                            Text("Custom").tag("custom")
-                            Text("Qishi Random").tag("qishi")
-                        }
-                        .frame(width: 140)
-                    }
-                    if sm.settings.ambientSource == "qishi" {
-                        Text("每个番茄随机播放一个栖时场景混音（共 \(QishiSceneStore.presets.count) 个场景，暂停恢复自动延续，不与上个番茄重复）")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        sliderRow("Volume", value: $sm.settings.ambientSoundVolume)
-                        HStack {
-                            Button("试听随机场景") {
-                                if let preset = QishiSceneStore.randomPreset(excluding: nil) {
-                                    am.playQishiPreview(preset, volume: sm.settings.ambientSoundVolume)
-                                }
-                            }
-                            Button("停止试听") { am.stopPreview() }
-                        }
-                    } else {
-                        pickerRow("Ambient sound", selection: $sm.settings.ambientSound, options: AudioManager.allAmbientOptions)
-                        sliderRow("Volume", value: $sm.settings.ambientSoundVolume)
-                    }
-                }
-                Divider()
-                Text("HotKey: ⌥⌘P (Option+Command+P)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 14) {
+                content()
             }
-            .padding()
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(theme.pageBackground)
+        .foregroundColor(theme.ink)
+    }
+
+    private func settingsSection<Content: View>(_ title: String, symbol: String? = nil,
+                                                @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                if let symbol {
+                    Image(systemName: symbol)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(theme.accent)
+                }
+                Text(title)
+                    .font(theme.sectionFont(size: 13))
+                    .foregroundColor(theme.ink)
+                    .accessibilityAddTraits(.isHeader)
+            }
+            content()
+        }
+        .font(.system(size: 12))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .themeCard(theme, padding: 14)
+    }
+
+    private func note(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundColor(theme.muted)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func divider() -> some View {
+        Rectangle().fill(theme.line).frame(height: 1).accessibilityHidden(true)
+    }
+
+    func toggleRow(_ label: String, isOn: Binding<Bool>) -> some View {
+        HStack {
+            Text(label)
+            Spacer(minLength: 12)
+            Toggle(label, isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+        }
+    }
+
+    // MARK: Tabs
+
+    var timerSettingsTab: some View {
+        settingsPage {
+            settingsSection("Pomodoro Settings", symbol: "timer") {
+                stepperRow("Pomodoro duration", value: $sm.settings.pomoDurationMins, range: 1...120, suffix: "min")
+                stepperRow("Short break", value: $sm.settings.breakDuration, range: 1...60, suffix: "min")
+                stepperRow("Break extension", value: $sm.settings.breakExtention, range: 0...30, suffix: "min")
+                stepperRow("Long break", value: $sm.settings.longBreakDuration, range: 1...120, suffix: "min")
+                stepperRow("Long break after", value: $sm.settings.pomoSetNum, range: 1...12, suffix: "pomodoros")
+                divider()
+                toggleRow("Start breaks manually", isOn: $sm.settings.manualBreak)
+                toggleRow("Reset timer after break extension", isOn: $sm.settings.resetPomoAfterBreak)
+            }
+            settingsSection("Sounds", symbol: "speaker.wave.2") {
+                pickerRow("Pomodoro end sound", selection: $sm.settings.pomoEndSound, options: AudioManager.allSoundOptions)
+                sliderRow("Volume", value: $sm.settings.pomoEndSoundVolume)
+                pickerRow("Break end sound", selection: $sm.settings.breakEndSound, options: AudioManager.allSoundOptions)
+                sliderRow("Volume", value: $sm.settings.breakEndSoundVolume)
+                divider()
+                HStack {
+                    Text("Ambient source")
+                    Spacer()
+                    Picker("Ambient source", selection: $sm.settings.ambientSource) {
+                        Text("Custom").tag("custom")
+                        Text("Qishi Random").tag("qishi")
+                    }
+                    .labelsHidden()
+                    .frame(width: 140)
+                }
+                if sm.settings.ambientSource == "qishi" {
+                    note("每个番茄随机播放一个栖时场景混音（共 \(QishiSceneStore.presets.count) 个场景，暂停恢复自动延续，不与上个番茄重复）")
+                    sliderRow("Volume", value: $sm.settings.ambientSoundVolume)
+                    HStack(spacing: 8) {
+                        Button("试听随机场景") {
+                            if let preset = QishiSceneStore.randomPreset(excluding: nil) {
+                                am.playQishiPreview(preset, volume: sm.settings.ambientSoundVolume)
+                            }
+                        }
+                        Button("停止试听") { am.stopPreview() }
+                    }
+                    .buttonStyle(QuietButtonStyle(theme: theme, height: 28))
+                } else {
+                    pickerRow("Ambient sound", selection: $sm.settings.ambientSound, options: AudioManager.allAmbientOptions)
+                    sliderRow("Volume", value: $sm.settings.ambientSoundVolume)
+                }
+            }
+            note("HotKey: ⌥⌘P (Option+Command+P)")
         }
     }
 
     var blockSettingsTab: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                Group {
-                    Toggle("Enable Block Mode", isOn: $sm.settings.enableBlockMode)
-
-                    if sm.settings.enableBlockMode {
-                        Divider()
-
-                        Text("Block Settings").font(.headline)
-                        stepperRow("Blocks per day", value: $sm.settings.blockCount, range: 1...24, suffix: "blocks")
-                        stepperRow("Pomodoros per block", value: $sm.settings.blockPomoCount, range: 1...12, suffix: "pomodoros")
-                        Toggle("Reward when block complete", isOn: $sm.settings.blockRewardEnabled)
-                        Toggle("Sprint reminder", isOn: $sm.settings.blockSprintReminder)
-                        Toggle("Remind before block starts", isOn: $sm.settings.blockStartReminder)
-                        if sm.settings.blockStartReminder {
-                            stepperRow("Reminder lead time", value: $sm.settings.blockReminderMinutes,
-                                       range: 1...60, suffix: "min")
-                        }
-
-                        Divider()
-
-                        Text("Block Time Ranges & Goals").font(.headline)
-                        Text("Set time range and goal for each block").font(.caption).foregroundColor(.secondary)
-
-                        ForEach(0..<sm.settings.blockCount, id: \.self) { index in
-                            let blockIndex = index
-
-                            VStack(alignment: .leading, spacing: 8) {
-                                // Block header
-                                Text("Block \(index + 1)")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-
-                                // Time range inputs
-                                HStack(spacing: 8) {
-                                    Text("Time:")
-                                        .font(.caption)
-                                    Picker("Start Hour", selection: Binding(
-                                        get: { blockIndex < sm.settings.blockTimeRanges.count ? sm.settings.blockTimeRanges[blockIndex].startHour : 4 },
-                                        set: { newValue in
-                                            while sm.settings.blockTimeRanges.count <= blockIndex {
-                                                sm.settings.blockTimeRanges.append(BlockTimeRange(startHour: 4, startMinute: 0, endHour: 7, endMinute: 0))
-                                            }
-                                            sm.settings.blockTimeRanges[blockIndex].startHour = newValue
-                                        }
-                                    )) {
-                                        ForEach(0..<24, id: \.self) { hour in
-                                            Text(String(format: "%02d:00", hour)).tag(hour)
-                                        }
-                                    }
-
-                                    Picker("Start Minute", selection: Binding(
-                                        get: { blockIndex < sm.settings.blockTimeRanges.count ? sm.settings.blockTimeRanges[blockIndex].startMinute : 0 },
-                                        set: { newValue in
-                                            while sm.settings.blockTimeRanges.count <= blockIndex {
-                                                sm.settings.blockTimeRanges.append(BlockTimeRange(startHour: 4, startMinute: 0, endHour: 7, endMinute: 0))
-                                            }
-                                            sm.settings.blockTimeRanges[blockIndex].startMinute = newValue
-                                        }
-                                    )) {
-                                        ForEach(0..<60, id: \.self) { minute in
-                                            Text(String(format: ":%02d", minute)).tag(minute)
-                                        }
-                                    }
-
-                                    Text("-")
-                                        .foregroundColor(.secondary)
-
-                                    Picker("End Hour", selection: Binding(
-                                        get: { blockIndex < sm.settings.blockTimeRanges.count ? sm.settings.blockTimeRanges[blockIndex].endHour : 7 },
-                                        set: { newValue in
-                                            while sm.settings.blockTimeRanges.count <= blockIndex {
-                                                sm.settings.blockTimeRanges.append(BlockTimeRange(startHour: 4, startMinute: 0, endHour: 7, endMinute: 0))
-                                            }
-                                            sm.settings.blockTimeRanges[blockIndex].endHour = newValue
-                                        }
-                                    )) {
-                                        ForEach(0..<24, id: \.self) { hour in
-                                            Text(String(format: "%02d:00", hour)).tag(hour)
-                                        }
-                                    }
-
-                                    Picker("End Minute", selection: Binding(
-                                        get: { blockIndex < sm.settings.blockTimeRanges.count ? sm.settings.blockTimeRanges[blockIndex].endMinute : 0 },
-                                        set: { newValue in
-                                            while sm.settings.blockTimeRanges.count <= blockIndex {
-                                                sm.settings.blockTimeRanges.append(BlockTimeRange(startHour: 4, startMinute: 0, endHour: 7, endMinute: 0))
-                                            }
-                                            sm.settings.blockTimeRanges[blockIndex].endMinute = newValue
-                                        }
-                                    )) {
-                                        ForEach(0..<60, id: \.self) { minute in
-                                            Text(String(format: ":%02d", minute)).tag(minute)
-                                        }
-                                    }
-                                }
-                                .font(.caption)
-
-                                // Goal input
-                                let goalText: Binding<String> = Binding(
-                                    get: {
-                                        if blockIndex < sm.settings.blockGoals.count {
-                                            return sm.settings.blockGoals[blockIndex]
-                                        }
-                                        return ""
-                                    },
-                                    set: { newValue in
-                                        if blockIndex < sm.settings.blockGoals.count {
-                                            sm.settings.blockGoals[blockIndex] = newValue
-                                        } else {
-                                            sm.settings.blockGoals.append(newValue)
-                                        }
-                                    }
-                                )
-                                TextField("Optional goal", text: goalText)
-                                    .textFieldStyle(.roundedBorder)
-                            }
-                            .padding(.vertical, 4)
-                        }
-
-                        Divider()
-
-                        Button("Reset Block Progress") { showResetBlockConfirm = true }
-                        .foregroundColor(.orange)
-
-                        Button("Clear Block History") { showClearBlocksConfirm = true }
-                        .foregroundColor(.red)
+        settingsPage {
+            settingsSection("Block Mode", symbol: "square.grid.3x3") {
+                toggleRow("Enable Block Mode", isOn: $sm.settings.enableBlockMode)
+                if sm.settings.enableBlockMode {
+                    divider()
+                    stepperRow("Blocks per day", value: $sm.settings.blockCount, range: 1...24, suffix: "blocks")
+                    stepperRow("Pomodoros per block", value: $sm.settings.blockPomoCount, range: 1...12, suffix: "pomodoros")
+                    toggleRow("Reward when block complete", isOn: $sm.settings.blockRewardEnabled)
+                    toggleRow("Sprint reminder", isOn: $sm.settings.blockSprintReminder)
+                    toggleRow("Remind before block starts", isOn: $sm.settings.blockStartReminder)
+                    if sm.settings.blockStartReminder {
+                        stepperRow("Reminder lead time", value: $sm.settings.blockReminderMinutes,
+                                   range: 1...60, suffix: "min")
                     }
                 }
             }
-            .padding()
+
+            if sm.settings.enableBlockMode {
+                settingsSection("Block Time Ranges & Goals", symbol: "clock") {
+                    note("Set time range and goal for each block")
+                    ForEach(0..<sm.settings.blockCount, id: \.self) { index in
+                        blockEditor(index)
+                    }
+                }
+
+                settingsSection("Reset", symbol: "arrow.counterclockwise") {
+                    HStack(spacing: 8) {
+                        Button("Reset Block Progress") { showResetBlockConfirm = true }
+                        Button("Clear Block History") { showClearBlocksConfirm = true }
+                    }
+                    .buttonStyle(QuietButtonStyle(theme: theme, height: 28))
+                    .foregroundColor(theme.danger)
+                }
+            }
         }
     }
 
-    var habiticaSettingsTab: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                Toggle("Connect to Habitica", isOn: $sm.settings.connectHabitica)
-                if sm.settings.connectHabitica {
-                    Group {
-                        Text("Habitica User ID:")
-                        TextField("User ID", text: $sm.settings.uid)
-                            .textFieldStyle(.roundedBorder)
-                        Text("Habitica API Token:")
-                        SecureField("API Token", text: $sm.settings.apiToken)
-                            .textFieldStyle(.roundedBorder)
-                        Link("Get credentials at habitica.com/user/settings/api",
-                             destination: URL(string: "https://habitica.com/user/settings/api")!)
-                            .font(.caption)
+    private func blockEditor(_ blockIndex: Int) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Block \(blockIndex + 1)")
+                .font(theme.numberFont(size: 12, weight: .semibold))
+                .foregroundColor(theme.accent)
+
+            HStack(spacing: 8) {
+                Text("Time:")
+                    .foregroundColor(theme.muted)
+                Picker("Start Hour", selection: Binding(
+                    get: { blockIndex < sm.settings.blockTimeRanges.count ? sm.settings.blockTimeRanges[blockIndex].startHour : 4 },
+                    set: { newValue in
+                        while sm.settings.blockTimeRanges.count <= blockIndex {
+                            sm.settings.blockTimeRanges.append(BlockTimeRange(startHour: 4, startMinute: 0, endHour: 7, endMinute: 0))
+                        }
+                        sm.settings.blockTimeRanges[blockIndex].startHour = newValue
                     }
-                    Divider()
-                    Text("Pomodoro Habit").font(.headline)
-                    Toggle("+ habit when pomodoro done", isOn: $sm.settings.pomoHabitPlus)
-                    Toggle("- habit if stopped early", isOn: $sm.settings.pomoHabitMinus)
-                    Toggle("- habit if break extension over", isOn: $sm.settings.breakExtentionFails)
-                    Toggle("Use custom Pomodoro Habit ID", isOn: $sm.settings.customPomodoroTask)
+                )) {
+                    ForEach(0..<24, id: \.self) { hour in
+                        Text(String(format: "%02d:00", hour)).tag(hour)
+                    }
+                }
+
+                Picker("Start Minute", selection: Binding(
+                    get: { blockIndex < sm.settings.blockTimeRanges.count ? sm.settings.blockTimeRanges[blockIndex].startMinute : 0 },
+                    set: { newValue in
+                        while sm.settings.blockTimeRanges.count <= blockIndex {
+                            sm.settings.blockTimeRanges.append(BlockTimeRange(startHour: 4, startMinute: 0, endHour: 7, endMinute: 0))
+                        }
+                        sm.settings.blockTimeRanges[blockIndex].startMinute = newValue
+                    }
+                )) {
+                    ForEach(0..<60, id: \.self) { minute in
+                        Text(String(format: ":%02d", minute)).tag(minute)
+                    }
+                }
+
+                Text("-")
+                    .foregroundColor(theme.muted)
+
+                Picker("End Hour", selection: Binding(
+                    get: { blockIndex < sm.settings.blockTimeRanges.count ? sm.settings.blockTimeRanges[blockIndex].endHour : 7 },
+                    set: { newValue in
+                        while sm.settings.blockTimeRanges.count <= blockIndex {
+                            sm.settings.blockTimeRanges.append(BlockTimeRange(startHour: 4, startMinute: 0, endHour: 7, endMinute: 0))
+                        }
+                        sm.settings.blockTimeRanges[blockIndex].endHour = newValue
+                    }
+                )) {
+                    ForEach(0..<24, id: \.self) { hour in
+                        Text(String(format: "%02d:00", hour)).tag(hour)
+                    }
+                }
+
+                Picker("End Minute", selection: Binding(
+                    get: { blockIndex < sm.settings.blockTimeRanges.count ? sm.settings.blockTimeRanges[blockIndex].endMinute : 0 },
+                    set: { newValue in
+                        while sm.settings.blockTimeRanges.count <= blockIndex {
+                            sm.settings.blockTimeRanges.append(BlockTimeRange(startHour: 4, startMinute: 0, endHour: 7, endMinute: 0))
+                        }
+                        sm.settings.blockTimeRanges[blockIndex].endMinute = newValue
+                    }
+                )) {
+                    ForEach(0..<60, id: \.self) { minute in
+                        Text(String(format: ":%02d", minute)).tag(minute)
+                    }
+                }
+            }
+            .font(.caption)
+
+            // Goal input
+            let goalText: Binding<String> = Binding(
+                get: {
+                    if blockIndex < sm.settings.blockGoals.count {
+                        return sm.settings.blockGoals[blockIndex]
+                    }
+                    return ""
+                },
+                set: { newValue in
+                    if blockIndex < sm.settings.blockGoals.count {
+                        sm.settings.blockGoals[blockIndex] = newValue
+                    } else {
+                        sm.settings.blockGoals.append(newValue)
+                    }
+                }
+            )
+            TextField("Optional goal", text: goalText)
+                .textFieldStyle(.roundedBorder)
+        }
+        .themeWell(theme, padding: 10)
+    }
+
+    var habiticaSettingsTab: some View {
+        settingsPage {
+            settingsSection("Habitica", symbol: "link") {
+                toggleRow("Connect to Habitica", isOn: $sm.settings.connectHabitica)
+                if sm.settings.connectHabitica {
+                    divider()
+                    Text("Habitica User ID:")
+                    TextField("User ID", text: $sm.settings.uid)
+                        .textFieldStyle(.roundedBorder)
+                    Text("Habitica API Token:")
+                    SecureField("API Token", text: $sm.settings.apiToken)
+                        .textFieldStyle(.roundedBorder)
+                    Link("Get credentials at habitica.com/user/settings/api",
+                         destination: URL(string: "https://habitica.com/user/settings/api")!)
+                        .font(.caption)
+                        .foregroundColor(theme.accent)
+                }
+            }
+            if sm.settings.connectHabitica {
+                settingsSection("Pomodoro Habit", symbol: "plusminus") {
+                    toggleRow("+ habit when pomodoro done", isOn: $sm.settings.pomoHabitPlus)
+                    toggleRow("- habit if stopped early", isOn: $sm.settings.pomoHabitMinus)
+                    toggleRow("- habit if break extension over", isOn: $sm.settings.breakExtentionFails)
+                    toggleRow("Use custom Pomodoro Habit ID", isOn: $sm.settings.customPomodoroTask)
                     if sm.settings.customPomodoroTask {
                         TextField("Pomodoro Habit ID", text: Binding(
                             get: { sm.settings.pomodoroTaskId ?? "" },
@@ -763,10 +664,10 @@ struct SettingsView: View {
                         ))
                         .textFieldStyle(.roundedBorder)
                     }
-                    Divider()
-                    Text("Pomodoro Combo Habit").font(.headline)
-                    Toggle("+ habit for set complete", isOn: $sm.settings.pomoSetHabitPlus)
-                    Toggle("Use custom Combo Habit ID", isOn: $sm.settings.customSetTask)
+                }
+                settingsSection("Pomodoro Combo Habit", symbol: "flame") {
+                    toggleRow("+ habit for set complete", isOn: $sm.settings.pomoSetHabitPlus)
+                    toggleRow("Use custom Combo Habit ID", isOn: $sm.settings.customSetTask)
                     if sm.settings.customSetTask {
                         TextField("Combo Habit ID", text: Binding(
                             get: { sm.settings.pomodoroSetTaskId ?? "" },
@@ -774,142 +675,84 @@ struct SettingsView: View {
                         ))
                         .textFieldStyle(.roundedBorder)
                     }
-                    Divider()
-                    Text("Notifications").font(.headline)
-                    Toggle("Mobile notification - short break over", isOn: $sm.settings.breakExtentionNotify)
-                    Toggle("Mobile notification - long break over", isOn: $sm.settings.longBreakNotify)
-                    Divider()
+                }
+                settingsSection("Notifications", symbol: "bell") {
+                    toggleRow("Mobile notification - short break over", isOn: $sm.settings.breakExtentionNotify)
+                    toggleRow("Mobile notification - long break over", isOn: $sm.settings.longBreakNotify)
+                }
+                settingsSection("Developer", symbol: "server.rack") {
                     Text("Developer Server URL (leave empty for default):")
                     TextField("https://habitica.com/api/v3/", text: $sm.settings.developerServerUrl)
                         .textFieldStyle(.roundedBorder)
-                    Text("自定义服务会收到 User ID 和 API Token；只使用你信任的 HTTPS 地址。")
-                        .font(.caption).foregroundColor(.secondary)
+                    note("自定义服务会收到 User ID 和 API Token；只使用你信任的 HTTPS 地址。")
                 }
             }
-            .padding()
         }
     }
 
     var dataSettingsTab: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Data Storage").font(.headline)
-                
-                HStack(spacing: 8) {
+        settingsPage {
+            settingsSection("Data Storage", symbol: "externaldrive") {
+                HStack(spacing: 10) {
                     Image(systemName: "folder.fill")
-                        .foregroundColor(.blue)
-                    
+                        .foregroundColor(theme.accent)
+                        .frame(width: 30, height: 30)
+                        .background(theme.smallShape().fill(theme.accentSoft))
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Saved to Documents/.habitica-pomodoro")
-                            .font(.body)
+                            .font(.system(size: 12, weight: .medium))
                         Text(PomodoroDataDir.resolvedURL.path)
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(theme.muted)
                             .textSelection(.enabled)
                     }
-                    
+
                     Spacer()
-                    
+
                     Button("Save Now") {
                         syncAllData()
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(QuietButtonStyle(theme: theme, height: 28))
                 }
-                
-                Text("隐藏文件夹，随 Documents 由 iCloud Drive 自动同步")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                Divider()
-                
-                Text("Block History").font(.headline)
+
+                note("隐藏文件夹，随 Documents 由 iCloud Drive 自动同步")
+            }
+
+            settingsSection("Block History", symbol: "calendar") {
                 Text("Days: \(BlockProgressManager.shared.blockHistory.count)")
-                
+                    .font(theme.numberFont(size: 12))
+
                 let sortedDates = BlockProgressManager.shared.blockHistory.keys.sorted().reversed()
                 ForEach(Array(sortedDates.prefix(5)), id: \.self) { date in
-                    VStack(alignment: .leading, spacing: 4) {
+                    HStack {
                         Text(date)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(theme.numberFont(size: 11, weight: .regular))
+                            .foregroundColor(theme.muted)
+                        Spacer()
                         if let entries = BlockProgressManager.shared.blockHistory[date] {
                             Text("Entries: \(entries.count)")
-                                .font(.caption2)
+                                .font(theme.numberFont(size: 11, weight: .regular))
                         }
                     }
                     .padding(.vertical, 2)
                 }
-                
+
                 if BlockProgressManager.shared.blockHistory.count > 5 {
-                    Text("... and \(BlockProgressManager.shared.blockHistory.count - 5) more days")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    note("... and \(BlockProgressManager.shared.blockHistory.count - 5) more days")
                 }
             }
-            .padding()
         }
     }
-    
+
     var appearanceSettingsTab: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("界面风格").font(.headline)
-                Text("三种布局可随时切换；选择保存在本机，不影响任务、计时或同步数据。")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                ForEach(AppUIStyle.allCases) { style in
-                    appearanceCard(style)
-                }
-
-                Divider()
-                Text("当前：\(styleStore.style.title)。也可以用主窗口右上角的调色板按钮快速切换。")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+        settingsPage {
+            settingsSection("界面风格", symbol: "paintpalette") {
+                note("\(AppUIStyle.allCases.count) 套皮肤可随时切换；选择保存在本机，不影响任务、计时或同步数据。")
+                SkinPickerList()
+                note("当前：\(styleStore.style.title)。也可以用主窗口右上角的调色板按钮快速切换。")
             }
-            .padding()
         }
-    }
-
-    func appearanceCard(_ style: AppUIStyle) -> some View {
-        let preview = AppTheme(style: style, dark: false)
-        let selected = styleStore.style == style
-        return Button {
-            styleStore.style = style
-        } label: {
-            HStack(spacing: 12) {
-                HStack(spacing: 4) {
-                    Circle().fill(preview.accent).frame(width: 12, height: 12)
-                    Circle().fill(preview.accentSoft).frame(width: 12, height: 12)
-                    Circle()
-                        .fill(preview.background)
-                        .frame(width: 12, height: 12)
-                        .overlay(Circle().strokeBorder(preview.line, lineWidth: 1))
-                }
-                .frame(width: 52, alignment: .leading)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(style.title).font(.system(size: 13, weight: .medium))
-                    Text(style.tagline).font(.caption).foregroundColor(.secondary)
-                }
-                Spacer()
-                if selected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.accentColor)
-                }
-            }
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(selected ? Color.accentColor.opacity(0.08) : Color.secondary.opacity(0.05))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(selected ? Color.accentColor.opacity(0.5) : Color.secondary.opacity(0.18), lineWidth: 1)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     private func syncAllData() {
@@ -944,7 +787,11 @@ struct SettingsView: View {
         HStack {
             Text(label)
             Spacer()
-            Stepper("\(value.wrappedValue) \(suffix)", value: value, in: range)
+            Text("\(value.wrappedValue) \(suffix)")
+                .font(theme.numberFont(size: 12, weight: .regular))
+                .foregroundColor(theme.muted)
+            Stepper(label, value: value, in: range)
+                .labelsHidden()
         }
     }
 
@@ -952,9 +799,10 @@ struct SettingsView: View {
         HStack {
             Text(label)
             Spacer()
-            Picker("", selection: selection) {
+            Picker(label, selection: selection) {
                 ForEach(options, id: \.self) { Text($0.replacingOccurrences(of: ".mp3", with: "")) }
             }
+            .labelsHidden()
             .frame(width: 140)
             Button {
                 let volume: Double
@@ -964,47 +812,28 @@ struct SettingsView: View {
                 am.playSound(selection.wrappedValue, volume: volume)
             } label: {
                 Image(systemName: "play.circle")
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.accent)
+                    .frame(width: 24, height: 22)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(SkinPlainButtonStyle(theme: theme))
             .disabled(selection.wrappedValue == "None")
             .help("Preview sound")
+            .accessibilityLabel("Preview sound")
         }
     }
 
     func sliderRow(_ label: String, value: Binding<Double>) -> some View {
         HStack {
             Text(label)
+            Spacer()
             Slider(value: value, in: 0...1)
                 .frame(width: 200)
+                .accessibilityLabel(label)
             Text("\(Int(value.wrappedValue * 100))%")
-                .font(.caption)
-                .frame(width: 35)
-        }
-    }
-}
-
-// MARK: - Current Block Progress View (当前块进度视图)
-struct CurrentBlockProgressView: View {
-    @EnvironmentObject var engine: PomodoroEngine
-
-    var body: some View {
-        CurrentBlockProgressViewContent()
-    }
-}
-
-private struct CurrentBlockProgressViewContent: View {
-    @EnvironmentObject var engine: PomodoroEngine
-    @ObservedObject var blockManager = BlockProgressManager.shared
-
-    var body: some View {
-        blockManager.updateBlockIndexFromTime(settings: engine.settings)
-        let bp = blockManager.blockProgress
-        let (completed, total) = blockManager.getCurrentBlockCompletion(settings: engine.settings)
-
-        return VStack(spacing: 2) {
-            Text("B\(bp.currentBlockIndex + 1): \(completed)/\(total)")
-                .font(.caption)
-                .foregroundColor(.white.opacity(0.8))
+                .font(theme.numberFont(size: 11, weight: .regular))
+                .foregroundColor(theme.muted)
+                .frame(width: 38, alignment: .trailing)
         }
     }
 }
@@ -1021,27 +850,29 @@ struct BlockTimeBlockView: View {
 
 private struct BlockTimeBlockViewContent: View {
     @EnvironmentObject var engine: PomodoroEngine
+    @Environment(\.appTheme) private var theme
     @ObservedObject var blockManager = BlockProgressManager.shared
     @ObservedObject var plantJournal = PlantJournal.shared
 
     var body: some View {
         let progress = blockManager.getTodayBlockProgress(settings: engine.settings)
         let totalPomoPerBlock = engine.settings.blockPomoCount
+        let current = blockManager.blockProgress.currentBlockIndex
 
-        VStack(spacing: 6) {
+        VStack(spacing: 2) {
             ForEach(0..<engine.settings.blockCount, id: \.self) { blockIndex in
                 HStack(spacing: 8) {
                     // Block index label
                     Text("B\(blockIndex + 1)")
-                        .font(.system(.caption, design: .rounded).weight(.medium))
-                        .foregroundColor(.primary)
+                        .font(theme.numberFont(size: 11, weight: .semibold))
+                        .foregroundColor(blockIndex == current ? theme.accent : theme.ink)
                         .frame(width: 25, alignment: .leading)
 
                     // Show time range if available
                     if blockIndex < engine.settings.blockTimeRanges.count {
                         Text(engine.settings.blockTimeRanges[blockIndex].displayString)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundColor(.secondary)
+                            .font(theme.numberFont(size: 10, weight: .regular))
+                            .foregroundColor(theme.muted)
                     }
                     
                     // Show block goal if available
@@ -1049,8 +880,8 @@ private struct BlockTimeBlockViewContent: View {
                         let goal = engine.settings.blockGoals[blockIndex]
                         if !goal.isEmpty {
                             Text(goal)
-                                .font(.system(.caption, design: .default))
-                                .foregroundColor(.primary)
+                                .font(.system(size: 11))
+                                .foregroundColor(theme.ink)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                         }
@@ -1068,7 +899,7 @@ private struct BlockTimeBlockViewContent: View {
                         }
                         .help("完成 \(attempts.filter { $0 == .shrub }.count) · 放弃 \(attempts.filter { $0 == .wilted }.count)")
 
-                        Rectangle().fill(Color.secondary.opacity(0.3))
+                        Rectangle().fill(theme.line)
                             .frame(width: 1, height: 10)
                             .padding(.horizontal, 2)
                         let trees = plantJournal.treeCount(blockIndex: blockIndex)
@@ -1076,14 +907,17 @@ private struct BlockTimeBlockViewContent: View {
                     }
                 }
                 .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(theme.smallShape(6).fill(blockIndex == current ? theme.accentSoft.opacity(0.7) : Color.clear))
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
     }
 }
 
 // 与原小圆点共用一行；固定尺寸，不撑大时间块布局。
 private struct PlantMarkerView: View {
+    @Environment(\.appTheme) private var theme
     var outcome: PlantOutcome? = nil
     var treeCount: Int = 0
 
@@ -1095,16 +929,16 @@ private struct PlantMarkerView: View {
                     .help("完成 \(treeCount) 个 combo")
                 if treeCount > 1 {
                     Text("×\(treeCount)")
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary)
+                        .font(theme.numberFont(size: 9, weight: .semibold))
+                        .foregroundColor(theme.highlight)
                 }
             } else if let outcome = outcome {
                 Text(outcome == .shrub ? "🌿" : "🥀")
                     .font(.system(size: 11))
                     .help(outcome == .shrub ? "完成 Pomo：灌木" : "中途放弃：枯萎")
             } else {
-                Circle()
-                    .strokeBorder(Color.secondary.opacity(0.4), lineWidth: 1)
+                theme.dotShape
+                    .stroke(theme.muted.opacity(0.5), lineWidth: 1)
                     .frame(width: 7, height: 7)
                     .help("尚未种植")
             }

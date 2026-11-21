@@ -33,7 +33,7 @@ class PomodoroEngine: ObservableObject {
     private var foregroundRecovery: UUID?
     private var endHandler: ((Date) -> Void)?
     private(set) var phaseEndsAt: Date?
-    private var phaseDuration = 0
+    private(set) var phaseDuration = 0
 
     /// Display-only progress of the current phase (0...1). Never used for scheduling.
     var phaseProgress: Double {
@@ -44,8 +44,8 @@ class PomodoroEngine: ObservableObject {
     private var activePomodoroSettings: UserSettings?
     private var activeBreakSettings: UserSettings?
     private var activeBreakExtensionSettings: UserSettings?
-    private var completedSet = false
-    private var customBreak = false
+    private(set) var completedSet = false
+    private(set) var customBreak = false
     private var pendingBreakSeconds = 0
     private var pomodoroTaskId: String?
     private var pomodoroSetTaskId: String?

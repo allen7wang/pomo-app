@@ -279,6 +279,10 @@ data class TopThreeStore(
     val categoryTagIds: Map<String, String> = emptyMap(),
     val history: Map<String, TopThreeDay> = emptyMap(),
     val deletedCloudIds: Set<String> = emptySet(),
+    // Deletions the server already confirmed (404 read-back). Unlike Apple, where these are a subset of
+    // deletedCloudIds, Android drains the pending queue on confirmation and keeps the tombstone here, so
+    // confirmed deletes are never re-sent while stale responses still cannot re-import them.
+    val confirmedDeletedCloudIds: Set<String> = emptySet(),
     // Remote ID -> explicitly deleted original UUID, scoped to this owner partition.
     val deletedCloudTaskOrigins: Map<String, String> = emptyMap(),
     val deletedCreateMarkers: Set<String> = emptySet(),
@@ -346,6 +350,7 @@ data class TopThreeStore(
         put("pomodoroHabitId", pomodoroHabitId ?: JSONObject.NULL)
         put("comboHabitId", comboHabitId ?: JSONObject.NULL)
         put("deletedCloudIds", JSONArray(deletedCloudIds.toList()))
+        put("confirmedDeletedCloudIds", JSONArray(confirmedDeletedCloudIds.toList()))
         put("deletedCloudTaskOrigins", JSONObject(deletedCloudTaskOrigins))
         put("deletedCreateMarkers", JSONArray(deletedCreateMarkers.toList()))
         put("deletedCloudIdMarkers", JSONObject(deletedCloudIdMarkers))
@@ -387,6 +392,7 @@ data class TopThreeStore(
                 pomodoroHabitId = json.optString("pomodoroHabitId").takeIf { it.isNotBlank() && it != "null" },
                 comboHabitId = json.optString("comboHabitId").takeIf { it.isNotBlank() && it != "null" },
                 deletedCloudIds = json.optJSONArray("deletedCloudIds")?.let { arr -> (0 until arr.length()).map { arr.optString(it) }.toSet() } ?: emptySet(),
+                confirmedDeletedCloudIds = json.optJSONArray("confirmedDeletedCloudIds")?.let { arr -> (0 until arr.length()).map { arr.optString(it) }.toSet() } ?: emptySet(),
                 deletedCloudTaskOrigins = json.optJSONObject("deletedCloudTaskOrigins")?.let { obj -> obj.keys().asSequence().mapNotNull { id ->
                     (obj.opt(id) as? String)?.takeIf { it.isNotBlank() }?.let { id to it }
                 }.toMap() } ?: emptyMap(),
@@ -414,6 +420,7 @@ private fun mergeOwnerPartitions(primary: TopThreeStore, secondary: TopThreeStor
     return primary.copy(categoryNames = names, history = history,
         categoryTagIds = secondary.categoryTagIds + primary.categoryTagIds,
         deletedCloudIds = primary.deletedCloudIds + secondary.deletedCloudIds,
+        confirmedDeletedCloudIds = primary.confirmedDeletedCloudIds + secondary.confirmedDeletedCloudIds,
         // Missing/conflicting legacy origins must not gain an archive exemption during alias migration.
         deletedCloudTaskOrigins = (secondary.deletedCloudTaskOrigins + primary.deletedCloudTaskOrigins).filter { (id, origin) ->
             (id !in primary.deletedCloudIds || primary.deletedCloudTaskOrigins[id] == origin) &&

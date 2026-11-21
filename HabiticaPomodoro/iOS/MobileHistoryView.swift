@@ -21,18 +21,22 @@ struct MobileHistoryView: View {
                 LabeledContent("每日平均番茄", value: String(format: "%.1f", histogram.avgPomodoros))
                 LabeledContent("每日平均小时", value: String(format: "%.1f", histogram.avgHours))
             }
+            .listRowBackground(theme.surface)
             Section("近 14 个有记录的日期") {
                 ForEach(Array(histogram.sortedEntries.suffix(14).reversed()), id: \.date) { item in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text(item.date).font(.caption.monospacedDigit())
+                            Text(item.date).font(theme.numberFont(size: 12, weight: .regular))
                             Spacer()
                             Text("\(item.day.pomodoros) 🍅 · \(item.day.minutes) 分")
+                                .font(theme.numberFont(size: 13, weight: .regular))
                         }
-                        ProgressView(value: Double(item.day.pomodoros), total: Double(max(1, histogram.sortedEntries.map { $0.day.pomodoros }.max() ?? 1)))
+                        SkinProgressBar(value: Double(item.day.pomodoros), total: Double(max(1, histogram.sortedEntries.map { $0.day.pomodoros }.max() ?? 1)))
                     }
+                    .padding(.vertical, 2)
                 }
             }
+            .listRowBackground(theme.surface)
             Section("时间块历史") {
                 ForEach(blocks.blockHistory.keys.sorted().reversed(), id: \.self) { date in
                     DisclosureGroup(date) {
@@ -41,12 +45,13 @@ struct MobileHistoryView: View {
                                 Text("B\(entry.blockIndex + 1)")
                                 Spacer()
                                 Text("\(entry.pomodoros) / " + (entry.isComplete ? "已完成" : "未完成"))
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(entry.isComplete ? theme.accent : theme.muted)
                             }
                         }
                     }
                 }
             }
+            .listRowBackground(theme.surface)
             Section("植物历史") {
                 ForEach(plants.days.keys.sorted().reversed(), id: \.self) { key in
                     if let day = plants.days[key] {
@@ -63,14 +68,18 @@ struct MobileHistoryView: View {
                     }
                 }
             }
+            .listRowBackground(theme.surface)
             Section {
                 Button("清空番茄统计", role: .destructive) { confirmClear = true }
+                    .foregroundColor(theme.danger)
                 Button("清空块与植物历史", role: .destructive) { clearBlocks = true }
+                    .foregroundColor(theme.danger)
             }
+            .listRowBackground(theme.surface)
         }
         .navigationTitle("统计与历史")
         .scrollContentBackground(.hidden)
-        .background(theme.background)
+        .background(theme.pageBackground.ignoresSafeArea())
         .tint(theme.accent)
         .confirmationDialog("确认清空番茄统计？不删除时间块、植物或 Task。", isPresented: $confirmClear) {
             Button("清空番茄统计", role: .destructive) { histogram.clear() }

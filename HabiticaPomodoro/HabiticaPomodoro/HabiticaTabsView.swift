@@ -39,11 +39,12 @@ private struct HabiticaPageChrome<Content: View>: View {
             if configured, let error = error {
                 Label(error, systemImage: "exclamationmark.circle")
                     .font(.system(size: 11))
-                    .foregroundColor(.orange)
+                    .foregroundColor(theme.danger)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 9).fill(theme.subtle))
+                    .background(theme.smallShape(10).fill(theme.subtle))
+                    .overlay(theme.smallShape(10).strokeBorder(theme.danger.opacity(0.35), lineWidth: 1))
             }
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -60,7 +61,7 @@ private struct HabiticaLoadingState: View {
     @Environment(\.appTheme) private var theme
     var body: some View {
         VStack(spacing: 12) {
-            ProgressView().controlSize(.small)
+            ProgressView().controlSize(.small).tint(theme.accent)
             Text("正在同步 Habitica…")
                 .font(.system(size: 12))
                 .foregroundColor(theme.muted)
@@ -77,7 +78,7 @@ struct HabiticaHabitsView: View {
     @ObservedObject var settingsManager = SettingsManager.shared
     @ObservedObject private var api = HabiticaAPI.shared
 
-    @State private var habits: [HabiticaTaskItem] = []
+    @State private var habits: [HabiticaTaskItem] = HabiticaPreviewSamples.habits
     @State private var loading = false
     @State private var loadedAccount = ""
     @State private var loadGeneration = 0
@@ -88,45 +89,6 @@ struct HabiticaHabitsView: View {
     var body: some View {
         themedBody
             .task(id: accountSignature) { await load() }
-    }
-
-    private var legacyBody: some View {
-        Group {
-            if !isConfigured {
-                notConfiguredView
-            } else if loading && habits.isEmpty {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if habits.isEmpty {
-                emptyView
-            } else {
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 6) {
-                        ForEach(habits) { habit in
-                            HabitRow(item: habit, onScore: { direction in
-                                score(item: habit, direction: direction)
-                            }, scored: scoredIds.contains(habit.id), busy: inFlightIds.contains(habit.id))
-                        }
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 12)
-                    .padding(.bottom, 16)
-                }
-            }
-        }
-        .safeAreaInset(edge: .top) {
-            if isConfigured {
-                VStack(spacing: 4) {
-                    HStack {
-                        if loading { ProgressView().controlSize(.small) }
-                        Spacer()
-                        Button("刷新") { Task { await load() } }.disabled(loading)
-                    }
-                    if let error = api.lastError { Text(error).font(.caption).foregroundColor(.orange) }
-                }.padding(.horizontal, 24).padding(.vertical, 6)
-            }
-        }
-        .task(id: accountSignature) { await load() }
     }
 
     private var accountSignature: String {
@@ -140,36 +102,12 @@ struct HabiticaHabitsView: View {
         !settingsManager.settings.apiToken.isEmpty
     }
 
-    private var notConfiguredView: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "person.badge.key")
-                .font(.largeTitle)
-                .foregroundColor(.secondary)
-            Text("未配置 Habitica")
-                .font(.headline)
-            Text("请在 Settings → Habitica 填入 User ID 与 API Token")
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var emptyView: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "tray")
-                .font(.largeTitle)
-                .foregroundColor(.secondary)
-            Text(api.lastError == nil ? "暂无 Habits" : "Habits 加载失败")
-                .font(.headline)
-                .foregroundColor(.secondary)
-            Button("刷新") { Task { await load() } }
-                .controlSize(.small)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
+    /// Scoring still requires isConfigured, so offline preview samples can never reach the network.
+    private var showsAccount: Bool { isConfigured || HabiticaPreviewSamples.enabled }
 
     @MainActor
     func load() async {
+        if HabiticaPreviewSamples.enabled { return }
         let settings = settingsManager.settings
         let signature = accountSignature
         if loadedAccount != signature {
@@ -235,71 +173,16 @@ struct HabitRow: View {
     let scored: Bool
     let busy: Bool
 
+    /// Weak habits read as danger, neutral as highlight, strong as accent (Habitica's red→green scale).
     private var valueColor: Color {
-        if item.value < -1 { return .red }
-        if item.value < 1 { return .orange }
-        if item.value < 5 { return Color(red: 0.85, green: 0.8, blue: 0.3) }
-        return .green
+        if item.value < -1 { return theme.danger }
+        if item.value < 1 { return theme.highlight }
+        if item.value < 5 { return theme.accent.opacity(0.6) }
+        return theme.accent
     }
 
     var body: some View {
         themedBody
-    }
-
-    private var legacyBody: some View {
-        HStack(spacing: 0) {
-            // 减分按钮
-            Button(action: { onScore("down") }) {
-                Image(systemName: "minus")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 30, height: 44)
-                    .background(item.canDown && !scored && !busy ? Color.secondary : Color.gray.opacity(0.3))
-            }
-            .buttonStyle(.plain)
-            .disabled(!item.canDown || scored || busy)
-
-            // 内容
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(valueColor)
-                    .frame(width: 10, height: 10)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(item.text)
-                        .font(.callout)
-                        .lineLimit(1)
-                    Text(String(format: "value %.1f", item.value))
-                        .font(.caption2.monospacedDigit())
-                        .foregroundColor(.secondary)
-                }
-                Spacer(minLength: 4)
-                if scored {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                        .font(.system(size: 13))
-                }
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 44)
-            .background(Color.cardBackground)
-
-            // 加分按钮
-            Button(action: { onScore("up") }) {
-                Image(systemName: "plus")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 30, height: 44)
-                    .background(item.canUp && !scored && !busy ? Color.green : Color.gray.opacity(0.3))
-            }
-            .buttonStyle(.plain)
-            .disabled(!item.canUp || scored || busy)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(Color.gray.opacity(0.15), lineWidth: 1)
-        )
-        .opacity(scored ? 0.6 : 1)
     }
 }
 
@@ -311,7 +194,7 @@ struct HabiticaDailiesView: View {
     @ObservedObject var settingsManager = SettingsManager.shared
     @ObservedObject private var api = HabiticaAPI.shared
 
-    @State private var dailies: [HabiticaTaskItem] = []
+    @State private var dailies: [HabiticaTaskItem] = HabiticaPreviewSamples.dailies
     @State private var loading = false
     @State private var loadedAccount = ""
     @State private var loadGeneration = 0
@@ -321,63 +204,6 @@ struct HabiticaDailiesView: View {
     var body: some View {
         themedBody
             .task(id: accountSignature) { await load() }
-    }
-
-    private var legacyBody: some View {
-        Group {
-            if !isConfigured {
-                VStack(spacing: 8) {
-                    Image(systemName: "person.badge.key")
-                        .font(.largeTitle)
-                        .foregroundColor(.secondary)
-                    Text("未配置 Habitica")
-                        .font(.headline)
-                    Text("请在 Settings → Habitica 填入 User ID 与 API Token")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if loading && dailies.isEmpty {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if dailies.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "tray")
-                        .font(.largeTitle)
-                        .foregroundColor(.secondary)
-                    Text(api.lastError == nil ? "暂无 Dailies" : "Dailies 加载失败")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                    Button("刷新") { Task { await load() } }
-                        .controlSize(.small)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 6) {
-                        ForEach(dailies) { daily in
-                            DailyRow(item: daily, busy: inFlightIds.contains(daily.id), onToggle: { toggle(item: daily) })
-                        }
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 12)
-                    .padding(.bottom, 16)
-                }
-            }
-        }
-        .safeAreaInset(edge: .top) {
-            if isConfigured {
-                VStack(spacing: 4) {
-                    HStack {
-                        if loading { ProgressView().controlSize(.small) }
-                        Spacer()
-                        Button("刷新") { Task { await load() } }.disabled(loading)
-                    }
-                    if let error = api.lastError { Text(error).font(.caption).foregroundColor(.orange) }
-                }.padding(.horizontal, 24).padding(.vertical, 6)
-            }
-        }
-        .task(id: accountSignature) { await load() }
     }
 
     private var accountSignature: String {
@@ -391,8 +217,12 @@ struct HabiticaDailiesView: View {
         !settingsManager.settings.apiToken.isEmpty
     }
 
+    /// Scoring still requires isConfigured, so offline preview samples can never reach the network.
+    private var showsAccount: Bool { isConfigured || HabiticaPreviewSamples.enabled }
+
     @MainActor
     func load() async {
+        if HabiticaPreviewSamples.enabled { return }
         let settings = settingsManager.settings
         let signature = accountSignature
         if loadedAccount != signature {
@@ -453,43 +283,6 @@ struct DailyRow: View {
     var body: some View {
         themedBody
     }
-
-    private var legacyBody: some View {
-        HStack(spacing: 10) {
-            Button(action: onToggle) {
-                Image(systemName: item.completed ? "checkmark.square.fill" : "square")
-                    .foregroundColor(item.completed ? .green : .secondary)
-                    .font(.system(size: 17))
-            }
-            .buttonStyle(.borderless)
-            .disabled(busy)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(item.text)
-                    .font(.callout)
-                    .strikethrough(item.completed, color: .secondary)
-                    .lineLimit(1)
-                if !item.notes.isEmpty {
-                    Text(item.notes)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(item.completed ? Color.green.opacity(0.07) : Color.cardBackground)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(Color.gray.opacity(0.15), lineWidth: 1)
-        )
-        .opacity(item.completed ? 0.75 : 1)
-    }
 }
 
 // MARK: - Role Tab (Habitica 角色信息：血量/法力/经验/属性)
@@ -501,7 +294,7 @@ struct HabiticaProfileView: View {
     @ObservedObject var settingsManager = SettingsManager.shared
     @ObservedObject private var api = HabiticaAPI.shared
 
-    @State private var profile: HabiticaProfile? = nil
+    @State private var profile: HabiticaProfile? = HabiticaPreviewSamples.profile
     @State private var loading = false
     @State private var loadedAccount = ""
     @State private var loadGeneration = 0
@@ -511,142 +304,14 @@ struct HabiticaProfileView: View {
             .task(id: accountSignature) { await load() }
     }
 
-    private var legacyBody: some View {
-        Group {
-            if !isConfigured {
-                VStack(spacing: 8) {
-                    Image(systemName: "person.badge.key")
-                        .font(.largeTitle)
-                        .foregroundColor(.secondary)
-                    Text("未配置 Habitica")
-                        .font(.headline)
-                    Text("请在 Settings → Habitica 填入 User ID 与 API Token")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if loading && profile == nil {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let p = profile {
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 14) {
-                        // 头像区
-                        VStack(spacing: 4) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.purple.opacity(0.15))
-                                    .frame(width: 64, height: 64)
-                                Text(p.username.prefix(1).uppercased())
-                                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                                    .foregroundColor(.purple)
-                            }
-                            Text("@\(p.username)")
-                                .font(.headline)
-                            if !p.className.isEmpty {
-                                Text("\(p.className) · Lv.\(p.level)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            } else {
-                                Text("Lv.\(p.level)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .padding(.top, 20)
-
-                        // 三条资源（角色状态）
-                        VStack(spacing: 8) {
-                            StatBar(icon: "heart.fill", color: .red, label: "HP 生命",
-                                    value: p.hp, maxValue: max(p.maxHealth, 50),
-                                    valueText: String(format: "%.0f / %.0f", p.hp, max(p.maxHealth, 50)))
-                            StatBar(icon: "sparkles", color: .blue, label: "MP 法力",
-                                    value: p.mp, maxValue: max(p.maxMP, p.mp, 1),
-                                    valueText: String(format: "%.0f", p.mp))
-                            StatBar(icon: "star.fill", color: .purple, label: "EXP 经验",
-                                    value: p.exp, maxValue: max(expInLevel(p), 1),
-                                    valueText: String(format: "%.0f / %.0f", p.exp, expInLevel(p)))
-                        }
-                        .padding(.horizontal, 24)
-
-                        // 金币
-                        HStack(spacing: 6) {
-                            Image(systemName: "dollarsign.circle.fill")
-                                .foregroundColor(.yellow)
-                            Text(String(format: "%.2f GP", p.gp))
-                                .font(.subheadline.bold())
-                            Spacer()
-                        }
-                        .padding(.horizontal, 24)
-
-                        Divider().padding(.horizontal, 24)
-
-                        // 属性
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                            AttrCell(name: "STR 力量", value: p.str, color: .red)
-                            AttrCell(name: "CON 体质", value: p.con, color: .orange)
-                            AttrCell(name: "INT 智力", value: p.int, color: .blue)
-                            AttrCell(name: "PER 感知", value: p.per, color: .green)
-                        }
-                        .padding(.horizontal, 24)
-
-                        Divider().padding(.horizontal, 24)
-
-                        // 成就
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                            AchieveCell(name: "连续完美天数", value: "\(p.streak)")
-                            AchieveCell(name: "完美日总数", value: "\(p.perfectDays)")
-                            AchieveCell(name: "任务卷轴", value: "\(p.questsTotal)")
-                            AchieveCell(name: "注册时间", value: p.joinedAt.map { fmtDate($0) } ?? "—")
-                        }
-                        .padding(.horizontal, 24)
-
-                        // 刷新
-                        Button(action: { Task { await load() } }) {
-                            Label("刷新", systemImage: "arrow.clockwise")
-                        }
-                        .controlSize(.small)
-                        .padding(.top, 4)
-                        .padding(.bottom, 20)
-                    }
-                }
-            } else {
-                // 加载失败兜底
-                VStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.largeTitle)
-                        .foregroundColor(.orange)
-                    Text("角色数据加载失败")
-                        .font(.headline)
-                    Text("请检查网络或 Habitica 服务状态")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Button("重试") { Task { await load() } }
-                        .controlSize(.small)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .safeAreaInset(edge: .top) {
-            if isConfigured {
-                VStack(spacing: 4) {
-                    HStack {
-                        if loading { ProgressView().controlSize(.small) }
-                        Spacer()
-                        Button("刷新") { Task { await load() } }.disabled(loading)
-                    }
-                    if let error = api.lastError { Text(error).font(.caption).foregroundColor(.orange) }
-                }.padding(.horizontal, 24).padding(.vertical, 6)
-            }
-        }
-        .task(id: accountSignature) { await load() }
-    }
-
     private var isConfigured: Bool {
         settingsManager.settings.connectHabitica &&
         !settingsManager.settings.uid.isEmpty &&
         !settingsManager.settings.apiToken.isEmpty
     }
+
+    /// Scoring still requires isConfigured, so offline preview samples can never reach the network.
+    private var showsAccount: Bool { isConfigured || HabiticaPreviewSamples.enabled }
 
     private func expInLevel(_ p: HabiticaProfile) -> Double {
         // Habitica: exp needed = ((lvl^2)*0.25 + 10*lvl + 139.75)
@@ -667,6 +332,7 @@ struct HabiticaProfileView: View {
 
     @MainActor
     func load() async {
+        if HabiticaPreviewSamples.enabled { return }
         let settings = settingsManager.settings
         let signature = accountSignature
         if loadedAccount != signature {
@@ -700,33 +366,6 @@ struct StatBar: View {
     var body: some View {
         themedBody
     }
-
-    private var legacyBody: some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .foregroundColor(color)
-                .font(.system(size: 13))
-                .frame(width: 16)
-            Text(label)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .frame(width: 76, alignment: .leading)
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.gray.opacity(0.15))
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(color)
-                        .frame(width: max(0, min(1, value / max(maxValue, 0.001)) * geo.size.width))
-                }
-            }
-            .frame(height: 8)
-            Text(valueText ?? String(format: "%.0f", value))
-                .font(.caption2.monospacedDigit())
-                .foregroundColor(.secondary)
-                .frame(width: 64, alignment: .trailing)
-        }
-    }
 }
 
 // MARK: - AttrCell
@@ -740,24 +379,6 @@ struct AttrCell: View {
     var body: some View {
         themedBody
     }
-
-    private var legacyBody: some View {
-        HStack {
-            Text(name)
-                .font(.caption)
-                .foregroundColor(.secondary)
-            Spacer()
-            Text("\(value)")
-                .font(.callout.bold().monospacedDigit())
-                .foregroundColor(color)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.gray.opacity(0.06))
-        )
-    }
 }
 
 // MARK: - AchieveCell
@@ -770,23 +391,6 @@ struct AchieveCell: View {
     var body: some View {
         themedBody
     }
-
-    private var legacyBody: some View {
-        HStack {
-            Text(name)
-                .font(.caption)
-                .foregroundColor(.secondary)
-            Spacer()
-            Text(value)
-                .font(.callout.bold())
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.gray.opacity(0.06))
-        )
-    }
 }
 
 // MARK: - Habitica pages in the active skin
@@ -794,10 +398,10 @@ struct AchieveCell: View {
 extension HabiticaHabitsView {
     private var themedBody: some View {
         HabiticaPageChrome(title: "习惯", subtitle: "每天一点，慢慢养成。", symbol: "sparkles",
-                           detail: isConfigured && !habits.isEmpty ? "\(habits.count) 项习惯" : nil,
-                           configured: isConfigured, loading: loading, error: api.lastError,
+                           detail: showsAccount && !habits.isEmpty ? "\(habits.count) 项" : nil,
+                           configured: showsAccount, loading: loading, error: api.lastError,
                            refresh: { Task { await load() } }) {
-            if !isConfigured {
+            if !showsAccount {
                 ThemedEmptyState(symbol: "person.badge.key", title: "连接你的 Habitica",
                                  message: "在设置 → Habitica 中填入 User ID 与 API Token，开始记录习惯。")
             } else if loading && habits.isEmpty {
@@ -837,47 +441,51 @@ extension HabitRow {
                     .foregroundColor(theme.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 5) {
-                    Circle().fill(valueColor).frame(width: 6, height: 6)
+                    theme.dotShape.fill(valueColor).frame(width: 6, height: 6)
                     Text(String(format: "习惯值 %.1f", item.value))
-                        .font(.system(size: 10).monospacedDigit())
+                        .font(theme.numberFont(size: 10, weight: .regular))
                         .foregroundColor(theme.muted)
                     if scored {
-                        Text("· 已记录").font(.system(size: 10)).foregroundColor(theme.accent)
+                        Text("· 已记录").font(.system(size: 10, weight: .medium)).foregroundColor(theme.accent)
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if busy {
-                ProgressView().controlSize(.small)
+                ProgressView().controlSize(.small).tint(theme.accent)
             }
             scoreButton(scored ? "checkmark" : "plus", direction: "up", enabled: item.canUp)
         }
         .themeCard(theme, padding: theme.cardPadding)
+        .opacity(scored ? 0.82 : 1)
     }
 
     private func scoreButton(_ symbol: String, direction: String, enabled: Bool) -> some View {
         let available = enabled && !scored && !busy
+        let up = direction == "up"
+        let shape = theme.smallShape(9)
         return Button { onScore(direction) } label: {
             Image(systemName: symbol)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(available ? (direction == "up" ? theme.onAccent : theme.muted) : theme.muted.opacity(0.5))
-                .frame(width: 32, height: 34)
-                .background(RoundedRectangle(cornerRadius: 8).fill(available && direction == "up" ? theme.accent : theme.subtle))
-                .contentShape(RoundedRectangle(cornerRadius: 8))
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(available ? (up ? theme.onAccent : theme.danger) : theme.muted.opacity(0.5))
+                .frame(width: 34, height: 34)
+                .background(shape.fill(available && up ? theme.accent : theme.subtle))
+                .overlay(theme.squareCorners ? shape.strokeBorder(theme.ink, lineWidth: theme.borderWidth) : nil)
+                .contentShape(shape)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SkinPlainButtonStyle(theme: theme, radius: min(theme.controlRadius, 9)))
         .disabled(!available)
-        .accessibilityLabel(direction == "up" ? "为\(item.text)加分" : "为\(item.text)减分")
+        .accessibilityLabel(up ? "为\(item.text)加分" : "为\(item.text)减分")
     }
 }
 
 extension HabiticaDailiesView {
     private var themedBody: some View {
         HabiticaPageChrome(title: "每日", subtitle: "把日常的小事，一件件做好。", symbol: "calendar",
-                           detail: isConfigured && !dailies.isEmpty ? "已完成 \(dailies.filter(\.completed).count) / \(dailies.count)" : nil,
-                           configured: isConfigured, loading: loading, error: api.lastError,
+                           detail: showsAccount && !dailies.isEmpty ? "\(dailies.filter(\.completed).count) / \(dailies.count)" : nil,
+                           configured: showsAccount, loading: loading, error: api.lastError,
                            refresh: { Task { await load() } }) {
-            if !isConfigured {
+            if !showsAccount {
                 ThemedEmptyState(symbol: "person.badge.key", title: "连接你的 Habitica",
                                  message: "在设置 → Habitica 中填入 User ID 与 API Token，查看每日打卡。")
             } else if loading && dailies.isEmpty {
@@ -904,13 +512,13 @@ extension DailyRow {
     private var themedBody: some View {
         HStack(spacing: 12) {
             Button(action: onToggle) {
-                Image(systemName: item.completed ? "checkmark.circle.fill" : "circle")
+                Image(systemName: theme.checkSymbol(item.completed))
                     .font(.system(size: 21, weight: .light))
                     .foregroundColor(item.completed ? theme.accent : theme.muted)
                     .frame(width: 30, height: 34)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SkinPlainButtonStyle(theme: theme))
             .disabled(busy)
             .accessibilityLabel(item.completed ? "取消完成\(item.text)" : "完成\(item.text)")
             VStack(alignment: .leading, spacing: 5) {
@@ -928,11 +536,9 @@ extension DailyRow {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if busy {
-                ProgressView().controlSize(.small)
+                ProgressView().controlSize(.small).tint(theme.accent)
             } else if item.completed {
-                Text("已完成")
-                    .font(.system(size: 10))
-                    .foregroundColor(theme.accent)
+                SkinChip(text: "已完成")
             }
         }
         .themeCard(theme, padding: theme.cardPadding)
@@ -942,9 +548,10 @@ extension DailyRow {
 extension HabiticaProfileView {
     private var themedBody: some View {
         HabiticaPageChrome(title: "角色", subtitle: "每一份努力，都在让你成长。", symbol: "person.crop.circle",
-                           configured: isConfigured, loading: loading, error: api.lastError,
+                           detail: profile.map { "Lv.\($0.level)" },
+                           configured: showsAccount, loading: loading, error: api.lastError,
                            refresh: { Task { await load() } }) {
-            if !isConfigured {
+            if !showsAccount {
                 ThemedEmptyState(symbol: "person.badge.key", title: "连接你的 Habitica",
                                  message: "在设置 → Habitica 中填入 User ID 与 API Token，查看你的角色与成长记录。")
             } else if loading && profile == nil {
@@ -983,22 +590,27 @@ extension HabiticaProfileView {
     private func identityCard(_ p: HabiticaProfile) -> some View {
         HStack(spacing: 14) {
             Text(p.username.prefix(1).uppercased())
-                .font(.system(size: 25, weight: .medium, design: .rounded))
+                .font(theme.titleFont(size: 25, weight: .medium))
                 .foregroundColor(theme.accent)
                 .frame(width: 58, height: 58)
-                .background(Circle().fill(theme.accentSoft))
+                .background(theme.dotShape.fill(theme.accentSoft))
+                .overlay(theme.squareCorners ? Rectangle().strokeBorder(theme.ink, lineWidth: theme.borderWidth) : nil)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 5) {
                 Text("@\(p.username)")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(theme.sectionFont(size: 15))
                     .foregroundColor(theme.ink)
                     .lineLimit(1)
                     .modifier(MacHelp(text: p.username))
                 Text(p.className.isEmpty ? "Lv.\(p.level)" : "\(p.className) · Lv.\(p.level)")
-                    .font(.system(size: 11))
+                    .font(theme.numberFont(size: 11, weight: .regular))
                     .foregroundColor(theme.muted)
-                Label(String(format: "%.2f GP", p.gp), systemImage: "dollarsign.circle")
-                    .font(.system(size: 11, weight: .medium).monospacedDigit())
-                    .foregroundColor(theme.accent)
+                HStack(spacing: 4) {
+                    Image(systemName: "dollarsign.circle.fill").foregroundColor(theme.highlight)
+                    Text(String(format: "%.2f GP", p.gp)).foregroundColor(theme.ink)
+                }
+                .font(theme.numberFont(size: 11))
+                .accessibilityElement(children: .combine)
             }
             Spacer(minLength: 0)
         }
@@ -1009,11 +621,11 @@ extension HabiticaProfileView {
     private func resourcesCard(_ p: HabiticaProfile) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             sectionTitle("角色状态", symbol: "waveform.path.ecg")
-            StatBar(icon: "heart.fill", color: .red, label: "HP 生命", value: p.hp, maxValue: max(p.maxHealth, 50),
+            StatBar(icon: "heart.fill", color: theme.danger, label: "HP 生命", value: p.hp, maxValue: max(p.maxHealth, 50),
                     valueText: String(format: "%.0f / %.0f", p.hp, max(p.maxHealth, 50)))
-            StatBar(icon: "sparkles", color: .blue, label: "MP 法力", value: p.mp, maxValue: max(p.maxMP, p.mp, 1),
+            StatBar(icon: "sparkles", color: theme.rest, label: "MP 法力", value: p.mp, maxValue: max(p.maxMP, p.mp, 1),
                     valueText: String(format: "%.0f", p.mp))
-            StatBar(icon: "star.fill", color: .purple, label: "EXP 经验", value: p.exp, maxValue: max(expInLevel(p), 1),
+            StatBar(icon: "star.fill", color: theme.highlight, label: "EXP 经验", value: p.exp, maxValue: max(expInLevel(p), 1),
                     valueText: String(format: "%.0f / %.0f", p.exp, expInLevel(p)))
         }
         .themeCard(theme, padding: theme.cardPadding)
@@ -1023,10 +635,10 @@ extension HabiticaProfileView {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle("能力属性", symbol: "square.grid.2x2")
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: theme.rowSpacing) {
-                AttrCell(name: "STR 力量", value: p.str, color: .red)
-                AttrCell(name: "CON 体质", value: p.con, color: .orange)
-                AttrCell(name: "INT 智力", value: p.int, color: .blue)
-                AttrCell(name: "PER 感知", value: p.per, color: .green)
+                AttrCell(name: "STR 力量", value: p.str, color: theme.danger)
+                AttrCell(name: "CON 体质", value: p.con, color: theme.highlight)
+                AttrCell(name: "INT 智力", value: p.int, color: theme.rest)
+                AttrCell(name: "PER 感知", value: p.per, color: theme.accent)
             }
         }
         .themeCard(theme, padding: theme.cardPadding)
@@ -1046,9 +658,15 @@ extension HabiticaProfileView {
     }
 
     private func sectionTitle(_ title: String, symbol: String) -> some View {
-        Label(title, systemImage: symbol)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundColor(theme.ink)
+        HStack(spacing: 6) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(theme.accent)
+            Text(title)
+                .font(theme.sectionFont(size: 13))
+                .foregroundColor(theme.ink)
+        }
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -1056,22 +674,15 @@ extension StatBar {
     private var themedBody: some View {
         VStack(spacing: 7) {
             HStack(spacing: 6) {
-                Image(systemName: icon).foregroundColor(color)
+                Image(systemName: icon).foregroundColor(color).frame(width: 14)
                 Text(label).foregroundColor(theme.muted)
                 Spacer(minLength: 4)
                 Text(valueText ?? String(format: "%.0f", value))
-                    .monospacedDigit()
+                    .font(theme.numberFont(size: 11))
                     .foregroundColor(theme.ink)
             }
             .font(.system(size: 11))
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(theme.subtle)
-                    Capsule().fill(color.opacity(theme.dark ? 0.9 : 0.75))
-                        .frame(width: max(0, min(1, value / max(maxValue, 0.001)) * geo.size.width))
-                }
-            }
-            .frame(height: 5)
+            SkinProgressBar(value: value, total: maxValue, tint: color, height: theme.squareCorners ? 8 : 6)
         }
         .accessibilityElement(children: .combine)
     }
@@ -1080,14 +691,16 @@ extension StatBar {
 extension AttrCell {
     private var themedBody: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(name).font(.system(size: 10)).foregroundColor(theme.muted)
+            HStack(spacing: 5) {
+                theme.dotShape.fill(color).frame(width: 6, height: 6)
+                Text(name).font(.system(size: 10)).foregroundColor(theme.muted)
+            }
             Text("\(value)")
-                .font(.system(size: 19, weight: .medium, design: .rounded).monospacedDigit())
+                .font(theme.numberFont(size: 19))
                 .foregroundColor(theme.ink)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 8).fill(theme.subtle))
+        .themeWell(theme)
         .accessibilityElement(children: .combine)
     }
 }
@@ -1097,11 +710,83 @@ extension AchieveCell {
         HStack(spacing: 8) {
             Text(name).font(.system(size: 11)).foregroundColor(theme.muted)
             Spacer(minLength: 0)
-            Text(value).font(.system(size: 12, weight: .medium).monospacedDigit()).foregroundColor(theme.ink)
+            Text(value).font(theme.numberFont(size: 12)).foregroundColor(theme.ink)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
-        .background(RoundedRectangle(cornerRadius: 8).fill(theme.subtle))
+        .background(theme.smallShape().fill(theme.subtle))
         .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - Offline preview samples (DEBUG `-previewHabiticaSamples`, skin screenshots only)
+
+/// Rows shown instead of live data when the launch argument is present. Never used for scoring or sync.
+enum HabiticaPreviewSamples {
+    #if DEBUG
+    static let enabled = ProcessInfo.processInfo.arguments.contains("-previewHabiticaSamples")
+    #else
+    static let enabled = false
+    #endif
+
+    static var habits: [HabiticaTaskItem] {
+        #if DEBUG
+        guard enabled else { return [] }
+        return [
+            HabiticaTaskItem(id: "s-h1", text: "睡前刷手机超过 30 分钟", notes: "", value: -3.2,
+                             completed: false, canUp: false, canDown: true, isDue: true),
+            HabiticaTaskItem(id: "s-h2", text: "喝一杯水", notes: "", value: 0.4,
+                             completed: false, canUp: true, canDown: false, isDue: true),
+            HabiticaTaskItem(id: "s-h3", text: "Pomodoro", notes: "", value: 3.6,
+                             completed: false, canUp: true, canDown: true, isDue: true),
+            HabiticaTaskItem(id: "s-h4", text: "读 20 页书", notes: "", value: 9.1,
+                             completed: false, canUp: true, canDown: false, isDue: true),
+        ]
+        #else
+        return []
+        #endif
+    }
+
+    static var dailies: [HabiticaTaskItem] {
+        #if DEBUG
+        guard enabled else { return [] }
+        return [
+            HabiticaTaskItem(id: "s-d1", text: "晨间拉伸 10 分钟", notes: "起床后先活动肩颈", value: 2,
+                             completed: true, canUp: true, canDown: true, isDue: true),
+            HabiticaTaskItem(id: "s-d2", text: "整理今日三件事", notes: "", value: 1,
+                             completed: false, canUp: true, canDown: true, isDue: true),
+            HabiticaTaskItem(id: "s-d3", text: "复盘与写日记", notes: "睡前 15 分钟", value: 0,
+                             completed: false, canUp: true, canDown: true, isDue: true),
+        ]
+        #else
+        return []
+        #endif
+    }
+
+    static var profile: HabiticaProfile? {
+        #if DEBUG
+        guard enabled else { return nil }
+        var p = HabiticaProfile()
+        p.username = "pomo_ranger"
+        p.className = "战士"
+        p.level = 23
+        p.exp = 412
+        p.hp = 38
+        p.maxHealth = 50
+        p.mp = 41
+        p.maxMP = 60
+        p.gp = 128.5
+        p.str = 12
+        p.con = 9
+        p.int = 7
+        p.per = 10
+        p.streak = 14
+        p.perfectDays = 63
+        p.questsTotal = 5
+        p.joinedAt = Date(timeIntervalSince1970: 1_640_995_200)
+        return p
+        #else
+        return nil
+        #endif
     }
 }

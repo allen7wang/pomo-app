@@ -26,9 +26,14 @@ struct TopThreeView: View {
             ThemedPageHeader(title: "每日任务", subtitle: "把重要的事，先做好。", symbol: "checklist")
 
             HStack(spacing: 10) {
-                Label("今天完成 \(todayCompleted)/\(todayTasks.count)", systemImage: "checkmark.circle")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(theme.muted)
+                HStack(spacing: 5) {
+                    Image(systemName: theme.checkSymbol(true)).foregroundColor(theme.accent)
+                    Text("今天完成 \(todayCompleted)/\(todayTasks.count)")
+                        .font(theme.numberFont(size: 11))
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(theme.muted)
+                .accessibilityElement(children: .combine)
                 Spacer(minLength: 0)
                 Button {
                     Task { await manager.synchronize(settings: settings) }
@@ -70,20 +75,19 @@ struct TopThreeView: View {
     private func daySection(key: String, editable: Bool) -> some View {
         VStack(alignment: .leading, spacing: theme.rowSpacing) {
             HStack(spacing: 7) {
-                Circle()
+                theme.dotShape
                     .fill(editable ? theme.accent : theme.muted)
                     .frame(width: 6, height: 6)
                 Text(editable ? "今天" : "昨天")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(theme.sectionFont(size: 14))
                     .foregroundColor(editable ? theme.ink : theme.muted)
+                    .accessibilityAddTraits(.isHeader)
                 Text(shortDate(key))
-                    .font(.system(size: 11).monospacedDigit())
+                    .font(theme.numberFont(size: 11, weight: .regular))
                     .foregroundColor(theme.muted)
                 Spacer(minLength: 0)
                 if !editable {
-                    Text("已归档")
-                        .font(.system(size: 10))
-                        .foregroundColor(theme.muted)
+                    SkinChip(text: "已归档", tint: theme.muted, fill: theme.subtle)
                 }
             }
             Text(editable ? "点击任务文字编辑，点击圆圈完成" : "已完成和已转移的任务")
@@ -103,13 +107,16 @@ struct TopThreeView: View {
         let today = todayKey
         let tasks = manager.unfinishedTasks(before: today)
         return VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label("未完成任务", systemImage: "tray")
-                    .font(.headline)
+            HStack(spacing: 6) {
+                Image(systemName: "tray")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(theme.accent)
+                Text("未完成任务")
+                    .font(theme.sectionFont(size: 14))
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
                 Text("\(tasks.count) 件")
-                    .font(.caption.monospacedDigit())
+                    .font(theme.numberFont(size: 11, weight: .regular))
                     .foregroundStyle(unfinishedHintColor)
             }
             Text(tasks.isEmpty ? "没有跨天未完成的任务。" : "可以转到今天的原分类，也可以删除。")
@@ -135,7 +142,7 @@ struct TopThreeView: View {
                     .font(.callout)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("\(item.dateKey) · \(manager.categoryName(index: item.category))")
-                    .font(.caption)
+                    .font(theme.numberFont(size: 11, weight: .regular))
                     .foregroundStyle(unfinishedHintColor)
                 if !canMove {
                     Text("今日分类已满")
@@ -148,14 +155,15 @@ struct TopThreeView: View {
                 manager.moveTaskToToday(fromKey: item.dateKey, category: item.category, id: item.id, settings: settings)
             } label: {
                 Image(systemName: "arrow.uturn.right")
-                    .font(.system(size: 12))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(canMove ? theme.accent : theme.muted)
                     .modifier(TaskActionTarget())
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(SkinPlainButtonStyle(theme: theme))
             .disabled(!canMove)
             .accessibilityLabel("转到今天")
             .help("转到今天")
-            TaskDeleteButton(color: unfinishedHintColor) {
+            TaskDeleteButton(color: unfinishedHintColor, hoverColor: theme.danger) {
                 manager.removeTask(key: item.dateKey, category: item.category, id: item.id, settings: settings, fromUnfinished: true)
             }
         }
@@ -220,7 +228,7 @@ struct TopThreeCategorySection: View {
                 } else {
                     HStack(spacing: 4) {
                         Text(manager.categoryName(index: category))
-                            .font(.subheadline.bold())
+                            .font(theme.sectionFont(size: 13))
                             .foregroundColor(categoryColor)
                         if editable {
                             Image(systemName: "pencil")
@@ -236,7 +244,7 @@ struct TopThreeCategorySection: View {
                     }
 
                     Text("\(completedCount)/\(tasks.count)")
-                        .font(.caption.monospacedDigit())
+                        .font(theme.numberFont(size: 11))
                         .foregroundColor(!tasks.isEmpty && completedCount == tasks.count ? completionColor : mutedColor)
                 }
                 Spacer()
@@ -281,9 +289,10 @@ struct TopThreeCategorySection: View {
             // 统一添加输入行（所有分类一致；有上限的分类满 3 条后隐藏）
             if manager.canAddTask(key: dateKey, category: category, settings: settings) {
                 HStack(spacing: 8) {
-                    Image(systemName: "plus.circle")
+                    Image(systemName: theme.squareCorners ? "plus.square" : "plus.circle")
                         .foregroundColor(categoryColor)
                         .font(.system(size: 15))
+                        .accessibilityHidden(true)
                     TextField(placeholder, text: $newTaskTitle, onCommit: {
                         manager.addTask(key: dateKey, category: category, title: newTaskTitle, settings: settings)
                         newTaskTitle = ""
@@ -341,14 +350,15 @@ struct TaskRow: View {
         HStack(spacing: 8) {
             if editable {
                 Button(action: onToggle) {
-                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                    Image(systemName: theme.checkSymbol(task.isCompleted))
                         .foregroundColor(task.isCompleted ? completionColor : mutedColor)
                         .font(.system(size: 15))
                         .modifier(TaskActionTarget())
                 }
                 .buttonStyle(.borderless)
+                .accessibilityLabel(task.isCompleted ? "取消完成" : "完成")
             } else {
-                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : (task.movedToToday ? "arrow.right.circle.fill" : "circle"))
+                Image(systemName: task.isCompleted ? theme.checkSymbol(true) : (task.movedToToday ? "arrow.right.circle.fill" : theme.checkSymbol(false)))
                     .foregroundColor(task.isCompleted ? completionColor : (task.movedToToday ? movedColor : mutedColor))
                     .font(.system(size: 15))
                     .opacity(0.55)
@@ -383,7 +393,7 @@ struct TaskRow: View {
 
             // 删除按钮
             if let onDelete = onDelete {
-                TaskDeleteButton(color: mutedColor, onDelete: onDelete)
+                TaskDeleteButton(color: mutedColor, hoverColor: theme.danger, onDelete: onDelete)
             }
         }
         .padding(.vertical, rowPadding)
@@ -409,22 +419,25 @@ struct TaskRow: View {
 
     private var movedColor: Color { theme.accent }
 
-    private var rowPadding: CGFloat { theme.style == .garden ? 4 : 2 }
+    private var rowPadding: CGFloat { theme.layout == .airy ? 4 : 2 }
 }
 
 private struct TaskDeleteButton: View {
     let color: Color
+    var hoverColor: Color? = nil
     let onDelete: () -> Void
     @State private var showConfirm = false
+    @State private var hovering = false
 
     var body: some View {
         Button { showConfirm = true } label: {
             Image(systemName: "trash")
                 .font(.system(size: 12))
-                .foregroundColor(color.opacity(0.7))
+                .foregroundColor(hovering ? (hoverColor ?? color) : color.opacity(0.7))
                 .modifier(TaskActionTarget())
         }
         .buttonStyle(.borderless)
+        .onHover { hovering = $0 }
         .accessibilityLabel("删除任务")
         .help("删除任务")
         .confirmationDialog("确定删除这条任务？", isPresented: $showConfirm, titleVisibility: .visible) {
@@ -443,8 +456,8 @@ private struct TaskInputStyle: ViewModifier {
             .foregroundColor(theme.ink)
             .padding(.horizontal, 9)
             .padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(theme.subtle))
-            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(theme.line, lineWidth: 1))
+            .background(theme.smallShape().fill(theme.subtle))
+            .overlay(theme.smallShape().strokeBorder(theme.controlStroke, lineWidth: theme.controlStrokeWidth))
             .tint(theme.accent)
     }
 }

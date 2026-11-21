@@ -1,39 +1,40 @@
 import Foundation
 
+struct SharedFocusReviewDataset: Decodable {
+    struct Window: Decodable {
+        let days, pomodoros, minutes, activeDays: Int
+        let start, end, defaultDay: String
+        let csvRows: [String]?
+    }
+    let instant, zone, earliest: String
+    let histogram: Histogram
+    let dailyBlocks: DailyBlocksHistory
+    let blockHistory: BlockHistory
+    let plants: [String: PlantDay]
+    let windows: [Window]
+}
+
+let parityRoot = URL(fileURLWithPath: ProcessInfo.processInfo.environment["POMO_FIXTURE_REPO_ROOT"]!)
+    .appendingPathComponent("parity")
+let dataset = try JSONDecoder().decode(SharedFocusReviewDataset.self,
+                                       from: Data(contentsOf: parityRoot.appendingPathComponent("focus_review.json")))
 var calendar = Calendar(identifier: .gregorian)
-calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
-let now = calendar.date(from: DateComponents(year: 2024, month: 3, day: 12, hour: 2))!
+calendar.timeZone = TimeZone(identifier: dataset.zone)!
+let now = ISO8601DateFormatter().date(from: dataset.instant)!
+let (histogram, dailyBlocks, blockHistory, plants) = (dataset.histogram, dataset.dailyBlocks, dataset.blockHistory, dataset.plants)
 
-func focus(_ pomodoros: Int, _ minutes: Int) -> DayHistogram {
-    DayHistogram(pomodoros: pomodoros, minutes: minutes, weekday: "")
+for window in dataset.windows {
+    let report = FocusReview(range: FocusReviewRange(rawValue: window.days)!, now: now, histogram: histogram,
+                             dailyBlocks: dailyBlocks, blockHistory: blockHistory, plants: plants, calendar: calendar)
+    precondition(report.days.count == window.days && report.startKey == window.start && report.endKey == window.end)
+    precondition(report.totals.pomodoros == window.pomodoros && report.totals.minutes == window.minutes &&
+                 report.totals.activeDays == window.activeDays)
+    precondition(report.selectedDay(nil)?.id == window.defaultDay)
+    if let rows = window.csvRows {
+        precondition(Array(report.csv.utf8) == Array((rows.joined(separator: "\r\n") + "\r\n").utf8))
+    }
 }
-
-func completed(_ date: String, _ block: Int, _ count: Int) -> BlockHistoryEntry {
-    BlockHistoryEntry(date: date, blockIndex: block, pomodoros: count, isComplete: true, completedAt: nil)
-}
-
-let legacyDay = "2024-03-07"
-let overlapDay = "2024-03-09"
-let plantOnlyDay = "2024-03-10"
-let histogram = [
-    "2024-01-01": focus(0, 0),
-    "2024-02-30": focus(99, 99),
-    overlapDay: focus(2, 35),
-    "2024-03-12": focus(1, 25),
-    "2024-03-13": focus(99, 99),
-]
-let dailyBlocks = [overlapDay: DailyBlockProgress(
-    date: overlapDay, blockProgress: [0, 2, 0], blockGoals: ["Reset", "  Private, focus  ", "Unused"]
-)]
-let blockHistory = [
-    legacyDay: [completed(legacyDay, 4, 3), completed(legacyDay, 4, 2)],
-    overlapDay: [completed(overlapDay, 0, 3), completed(overlapDay, 1, 1),
-                 completed(overlapDay, -1, 99), completed(overlapDay, Int.max, 99)],
-]
-let plants = [
-    overlapDay: PlantDay(attempts: [[.shrub], [.shrub, .wilted]], trees: [0, 1]),
-    plantOnlyDay: PlantDay(attempts: [[], [], [.wilted, .wilted]], trees: [0, 0, 1]),
-]
+print("PASS shared 7/30/90-day metrics, selection and 7/30-day CSV bytes")
 
 let review = FocusReview(range: .week, now: now, histogram: histogram, dailyBlocks: dailyBlocks,
                          blockHistory: blockHistory, plants: plants, calendar: calendar)
@@ -61,11 +62,36 @@ precondition(rows.count == 9 && rows.last == "")
 precondition(rows[0] == "date,pomodoros,minutes,completed_blocks,shrubs,trees,wilted")
 precondition(rows[1] == "2024-03-06,0,0,0,0,0,0" && rows[4] == "2024-03-09,2,35,2,2,1,1")
 precondition(!review.csv.contains("Private") && !review.csv.contains("2024-03-13"))
+precondition(review.csvFilename == "专注复盘-2024-03-06-2024-03-12.csv")
+let emptyCSV = FocusReview(range: .week, now: now, histogram: [:], dailyBlocks: [:],
+                           blockHistory: [:], plants: [:], calendar: calendar).csv
+precondition(emptyCSV.components(separatedBy: "\r\n").count == 9 && emptyCSV.hasSuffix(",0,0,0,0,0,0\r\n"))
 print("PASS CSV includes all selected dates and excludes goals and out-of-window records")
+print("PASS CSV filename names the exported range; an empty range still exports zero rows")
+
+// Earlier windows are counted from a fixed anchor, so paging survives midnight.
+let today = calendar.startOfDay(for: now)
+let back = FocusReviewWindow.previous(from: nil, today: today)
+precondition(back.offset == -1 && back.anchor == today)
+let backKeys = FocusReview(range: .week, now: back.endDate(range: .week, calendar: calendar)!, histogram: histogram,
+                           dailyBlocks: dailyBlocks, blockHistory: blockHistory, plants: plants, calendar: calendar)
+precondition(backKeys.startKey == "2024-02-28" && backKeys.endKey == "2024-03-05")
+let twoBack = FocusReviewWindow.previous(from: back, today: today)
+precondition(twoBack.offset == -2 && twoBack.next(today: today, range: .week, calendar: calendar) == back)
+precondition(back.next(today: today, range: .week, calendar: calendar) == nil)
+// After midnight the open page keeps its dates; paging forward visits the anchored
+// window (now ending yesterday) before returning to the rolling window.
+let afterMidnight = calendar.date(byAdding: .day, value: 1, to: today)!
+let anchored = back.next(today: afterMidnight, range: .week, calendar: calendar)
+precondition(anchored == FocusReviewWindow(anchor: today, offset: 0))
+precondition(anchored?.next(today: afterMidnight, range: .week, calendar: calendar) == nil)
+let monthBack = FocusReviewWindow.previous(from: nil, today: today)
+precondition(monthBack.endDate(range: .month, calendar: calendar).map { calendar.component(.day, from: $0) } == 11)
+print("PASS earlier windows page from a fixed anchor across midnight and return to the rolling window")
 
 let earliest = FocusReview.earliestDate(histogram: histogram, dailyBlocks: dailyBlocks,
                                         blockHistory: blockHistory, plants: plants, calendar: calendar)
-precondition(earliest == legacy.date)
+precondition(earliest == legacy.date && FocusReview.dateKeyFormatter(calendar: calendar).string(from: earliest!) == dataset.earliest)
 let month = FocusReview(range: .month, now: now, histogram: [:], dailyBlocks: [:],
                         blockHistory: [:], plants: [:], calendar: calendar)
 precondition(month.days.count == 30 && month.startKey == "2024-02-12" && !month.hasRecords)

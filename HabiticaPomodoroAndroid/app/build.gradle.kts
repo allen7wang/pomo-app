@@ -18,13 +18,14 @@ kotlin {
 android {
     namespace = "com.habitica.pomodoro"
     compileSdk = 35
+    buildToolsVersion = "35.0.0"
 
     defaultConfig {
         applicationId = "com.habitica.pomodoro"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "1.2.6"
+        versionCode = 7
+        versionName = "1.3.0"
     }
 
     signingConfigs {

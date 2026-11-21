@@ -207,7 +207,7 @@ check(engine.phase == .idle && histogram.totalPomodoros == beforeChain + 1,
 engine.reset()
 BlockNotificationManager.shared.stopReminderTimer()
 heartbeat.invalidate()
-check(beats > 0 && maxGap < 0.3, "foreground recovery keeps the main run loop responsive")
+check(beats > 0 && maxGap < fixtureMaxMainGap, "foreground recovery keeps the main run loop responsive")
 print(String(format: "FOREGROUND_RECOVERY_SUITE %@ failures=%d main_max_gap=%.3fs delayed_reads=%llu (synthetic transports)",
              failures == 0 ? "PASS" : "FAIL", failures, maxGap, delayedReads()))
 exit(failures == 0 ? 0 : 1)

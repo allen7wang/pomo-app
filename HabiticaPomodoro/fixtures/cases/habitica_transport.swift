@@ -1,4 +1,5 @@
 import Foundation
+@testable import PomodoroFixtureCore
 
 // Every URL is intercepted, including an unexpected one. No real account or server is used.
 final class HabiticaFixtureProtocol: URLProtocol {
@@ -9,6 +10,7 @@ final class HabiticaFixtureProtocol: URLProtocol {
         var delay: TimeInterval = 0
         var rawData: Data? = nil
         var error: URLError? = nil
+        var heldUntil: DispatchSemaphore? = nil
     }
     private static let lock = NSLock()
     private static var handler: (URLRequest) -> Reply = { _ in Reply() }
@@ -45,8 +47,15 @@ final class HabiticaFixtureProtocol: URLProtocol {
             self.client?.urlProtocol(self, didLoad: reply.rawData ?? (try! JSONSerialization.data(withJSONObject: reply.body)))
             self.client?.urlProtocolDidFinishLoading(self)
         }
-        if reply.delay > 0 { DispatchQueue.global().asyncAfter(deadline: .now() + reply.delay, execute: deliver) }
-        else { deliver() }
+        if let release = reply.heldUntil {
+            DispatchQueue.global().async {
+                if release.wait(timeout: .now() + 10) == .success { deliver() }
+            }
+        } else if reply.delay > 0 {
+            DispatchQueue.global().asyncAfter(deadline: .now() + reply.delay, execute: deliver)
+        } else {
+            deliver()
+        }
     }
     override func stopLoading() {
         deliveryLock.lock(); defer { deliveryLock.unlock() }

@@ -25,7 +25,7 @@ struct FocusReviewView: View {
                     ThemedPageHeader(title: "专注复盘", subtitle: "回看每天的番茄、时间块和种植记录。",
                                      symbol: "chart.bar.xaxis")
                     periodSummary(review, today: today, calendar: calendar)
-                    if review.hasRecords, let day = selectedDay(in: review) {
+                    if review.hasRecords, let day = review.selectedDay(selectedKey) {
                         trend(review, selected: day, calendar: calendar)
                         dayDetail(day)
                     } else {
@@ -67,11 +67,6 @@ struct FocusReviewView: View {
                            plants: plants.days, calendar: calendar)
     }
 
-    private func selectedDay(in review: FocusReview) -> FocusReviewDay? {
-        if let selectedKey, let day = review.days.first(where: { $0.id == selectedKey }) { return day }
-        return review.days.last(where: \.hasRecords) ?? review.days.last
-    }
-
     private func showPreviousPeriod(today: Date) {
         let page = historyPage ?? FocusReviewHistoryPage(anchor: today, offset: 0)
         historyPage = FocusReviewHistoryPage(anchor: page.anchor, offset: page.offset - 1)
@@ -101,20 +96,21 @@ struct FocusReviewView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            .tint(theme.accent)
             .accessibilityIdentifier("focus-review-range")
             .onChange(of: range) { _ in returnToToday() }
 
             HStack(spacing: 8) {
-                Button { showPreviousPeriod(today: today) } label: { Image(systemName: "chevron.left") }
+                Button { showPreviousPeriod(today: today) } label: { Image(systemName: "chevron.left").frame(width: 12) }
                     .help("上一个日期区间")
                     .accessibilityLabel("上一个日期区间")
                     .accessibilityIdentifier("focus-review-previous")
                     .disabled(!canPageBack)
                 Text("\(review.startKey) 至 \(review.endKey)")
-                    .font(.system(size: 11, weight: .medium).monospacedDigit())
+                    .font(theme.numberFont(size: 11))
                     .foregroundStyle(theme.ink)
                     .accessibilityIdentifier("focus-review-dates")
-                Button { showNextPeriod(today: today, calendar: calendar) } label: { Image(systemName: "chevron.right") }
+                Button { showNextPeriod(today: today, calendar: calendar) } label: { Image(systemName: "chevron.right").frame(width: 12) }
                     .help("下一个日期区间")
                     .accessibilityLabel("下一个日期区间")
                     .accessibilityIdentifier("focus-review-next")
@@ -124,8 +120,7 @@ struct FocusReviewView: View {
                     Button("回到今天", action: returnToToday)
                 }
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            .buttonStyle(QuietButtonStyle(theme: theme, height: 26, fontSize: 11))
 
             Rectangle().fill(theme.line).frame(height: 1).accessibilityHidden(true)
             HStack(spacing: 10) {
@@ -166,20 +161,20 @@ struct FocusReviewView: View {
                 dayButton(day, selected: active) {
                     VStack(spacing: 5) {
                         Text("\(day.minutes)")
-                            .font(.system(size: 10, weight: active ? .semibold : .regular).monospacedDigit())
+                            .font(theme.numberFont(size: 10, weight: active ? .semibold : .regular))
                             .foregroundStyle(active ? theme.accent : theme.muted)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(day.minutes > 0 ? theme.accent.opacity(active ? 1 : 0.60) : theme.line)
+                        theme.smallShape(3)
+                            .fill(day.minutes > 0 ? theme.accent.opacity(active ? 1 : 0.55) : theme.line)
                             .frame(width: 15, height: max(3, 54 * CGFloat(day.minutes) / CGFloat(peak)))
                         Text(String(day.id.suffix(5)).replacingOccurrences(of: "-", with: "/"))
-                            .font(.system(size: 10, weight: active ? .semibold : .regular).monospacedDigit())
+                            .font(theme.numberFont(size: 10, weight: active ? .semibold : .regular))
                             .foregroundStyle(active ? theme.accent : theme.ink)
                     }
                     .padding(.vertical, 5)
                     .frame(maxWidth: .infinity, minHeight: 95, alignment: .bottom)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(active ? theme.accentSoft : .clear))
+                    .background(theme.smallShape(6).fill(active ? theme.accentSoft : .clear))
                 }
             }
         }
@@ -207,9 +202,9 @@ struct FocusReviewView: View {
                             let day = days[index]
                             let active = day.id == selected.id
                             dayButton(day, selected: active) {
-                                RoundedRectangle(cornerRadius: 3)
+                                theme.smallShape(3)
                                     .fill(heatColor(minutes: day.minutes, peak: peak))
-                                    .overlay(RoundedRectangle(cornerRadius: 3)
+                                    .overlay(theme.smallShape(3)
                                         .strokeBorder(active ? theme.ink : .clear, lineWidth: 2))
                                     .frame(height: 17)
                                     .frame(maxWidth: .infinity)
@@ -225,7 +220,7 @@ struct FocusReviewView: View {
                 Spacer()
                 Text("0")
                 ForEach([0, 1, 2, 3], id: \.self) { level in
-                    RoundedRectangle(cornerRadius: 2)
+                    theme.smallShape(2)
                         .fill(heatColor(minutes: level, peak: 3))
                         .frame(width: 9, height: 9)
                 }
@@ -262,7 +257,7 @@ struct FocusReviewView: View {
                 sectionTitle("当日明细")
                 Spacer()
                 Text(day.id)
-                    .font(.system(size: 11, weight: .medium).monospacedDigit())
+                    .font(theme.numberFont(size: 11))
                     .foregroundStyle(theme.accent)
                     .accessibilityIdentifier("focus-review-selected-date")
             }
@@ -293,14 +288,14 @@ struct FocusReviewView: View {
             ForEach(blocks) { block in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("B\(block.id + 1)")
-                        .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                        .font(theme.numberFont(size: 11, weight: .semibold))
                         .foregroundStyle(theme.ink)
                     if let goal = block.goal {
                         Text(goal).font(.caption).foregroundStyle(theme.muted)
                     }
                     Spacer(minLength: 0)
                     Text("\(block.completedPomodoros) 个番茄")
-                        .font(.caption.monospacedDigit())
+                        .font(theme.numberFont(size: 11, weight: .regular))
                         .foregroundStyle(theme.ink)
                         .fixedSize()
                     if block.isCompleted {
@@ -310,9 +305,9 @@ struct FocusReviewView: View {
                             .fixedSize()
                     }
                 }
-                .padding(.vertical, 6)
-                .padding(.horizontal, 8)
-                .background(RoundedRectangle(cornerRadius: 5).fill(theme.subtle))
+                .padding(.vertical, 7)
+                .padding(.horizontal, 9)
+                .background(theme.smallShape(6).fill(theme.subtle))
                 .accessibilityElement(children: .combine)
             }
         }
@@ -323,9 +318,9 @@ struct FocusReviewView: View {
             sectionTitle("种植")
             if day.shrubs > 0 || day.trees > 0 || day.wilted > 0 {
                 HStack(spacing: 10) {
-                    metric("\(day.shrubs)", caption: "灌木")
-                    metric("\(day.trees)", caption: "树")
-                    metric("\(day.wilted)", caption: "枯萎")
+                    metric("\(day.shrubs)", caption: "灌木", tint: theme.accent)
+                    metric("\(day.trees)", caption: "树", tint: theme.highlight)
+                    metric("\(day.wilted)", caption: "枯萎", tint: theme.danger)
                 }
             } else {
                 Text("当天没有种植记录").font(.caption).foregroundStyle(theme.muted)
@@ -337,7 +332,7 @@ struct FocusReviewView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Button {
-                    exportDocument = FocusReviewCSV(text: review.csv, filename: "专注复盘-\(review.startKey)-\(review.endKey).csv")
+                    exportDocument = FocusReviewCSV(text: review.csv, filename: review.csvFilename)
                     showExport = true
                 } label: {
                     Label("导出 CSV", systemImage: "square.and.arrow.up")
@@ -346,11 +341,11 @@ struct FocusReviewView: View {
                 .accessibilityIdentifier("focus-review-export")
                 Spacer(minLength: 0)
                 Button("清空番茄统计") { showClearConfirm = true }
+                    .foregroundColor(theme.danger)
                     .disabled(histogram.histogram.isEmpty)
                     .accessibilityIdentifier("focus-review-clear")
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            .buttonStyle(QuietButtonStyle(theme: theme, height: 28, fontSize: 11))
             Text("全部历史 · \(histogram.totalPomodoros) 个番茄 · \(histogram.totalHours.formatted(.number.precision(.fractionLength(1)))) 小时")
                 .font(.caption)
                 .foregroundStyle(theme.muted)
@@ -362,21 +357,26 @@ struct FocusReviewView: View {
 
     private func sectionTitle(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 13, weight: .semibold))
+            .font(theme.sectionFont(size: 13))
             .foregroundStyle(theme.ink)
             .accessibilityAddTraits(.isHeader)
     }
 
-    private func metric(_ value: String, caption: String) -> some View {
+    private func metric(_ value: String, caption: String, tint: Color? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value)
-                .font(.system(size: 18, weight: .semibold).monospacedDigit())
+                .font(theme.numberFont(size: 18, weight: .semibold))
                 .foregroundStyle(theme.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            Text(caption)
-                .font(.system(size: 11))
-                .foregroundStyle(theme.muted)
+            HStack(spacing: 4) {
+                if let tint {
+                    theme.dotShape.fill(tint).frame(width: 6, height: 6)
+                }
+                Text(caption)
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.muted)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)

@@ -43,6 +43,29 @@ struct FocusReviewTotals {
     var wilted = 0
 }
 
+/// An earlier review window. Pages are counted from a fixed anchor day, so a page
+/// opened before midnight keeps showing the same dates afterwards.
+struct FocusReviewWindow: Equatable {
+    let anchor: Date
+    let offset: Int
+
+    static func previous(from current: FocusReviewWindow?, today: Date) -> FocusReviewWindow {
+        let page = current ?? FocusReviewWindow(anchor: today, offset: 0)
+        return FocusReviewWindow(anchor: page.anchor, offset: page.offset - 1)
+    }
+
+    func endDate(range: FocusReviewRange, calendar: Calendar = .current) -> Date? {
+        calendar.date(byAdding: .day, value: offset * range.rawValue, to: anchor).map { calendar.startOfDay(for: $0) }
+    }
+
+    /// nil means the next window reaches today, i.e. return to the rolling window.
+    func next(today: Date, range: FocusReviewRange, calendar: Calendar = .current) -> FocusReviewWindow? {
+        let next = FocusReviewWindow(anchor: anchor, offset: offset + 1)
+        guard let end = next.endDate(range: range, calendar: calendar), end < calendar.startOfDay(for: today) else { return nil }
+        return next
+    }
+}
+
 /// A read-only projection of the existing calendar-day stores.
 struct FocusReview {
     let days: [FocusReviewDay]
@@ -76,6 +99,11 @@ struct FocusReview {
         }
     }
 
+    func selectedDay(_ key: String?) -> FocusReviewDay? {
+        if let key, let day = days.first(where: { $0.id == key }) { return day }
+        return days.last(where: \.hasRecords) ?? days.last
+    }
+
     static func earliestDate(histogram: Histogram, dailyBlocks: DailyBlocksHistory, blockHistory: BlockHistory,
                              plants: [String: PlantDay], calendar: Calendar = .current) -> Date? {
         let formatter = dateKeyFormatter(calendar: calendar)
@@ -98,7 +126,10 @@ struct FocusReview {
         return ([header] + rows).joined(separator: "\r\n") + "\r\n"
     }
 
-    private static func dateKeyFormatter(calendar: Calendar) -> DateFormatter {
+    /// macOS and iOS name the same exported range identically.
+    var csvFilename: String { "专注复盘-\(startKey)-\(endKey).csv" }
+
+    static func dateKeyFormatter(calendar: Calendar) -> DateFormatter {
         let formatter = DateFormatter()
         formatter.calendar = calendar
         formatter.timeZone = calendar.timeZone
