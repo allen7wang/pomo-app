@@ -81,6 +81,30 @@ fun main() {
     expectEq(month.totals, t, "the 30-day window holds the same records")
     println("PASS CSV byte-identical to Apple for 7 and 30 days; goals and out-of-window records excluded")
 
+    val timeline = dataset.getJSONObject("taskTimeline")
+    val taskHistogram = timeline.getJSONObject("histogram").run { entries { DayHistogram.fromJson(getJSONObject(it)) } }
+    val taskReview = FocusReview(FocusReviewRange.WEEK, today, taskHistogram, emptyMap(), emptyMap(), emptyMap())
+    val detailDay = taskReview.selectedDay(timeline.getString("day"))!!
+    val entries = detailDay.chronologicalTaskSessions
+    val ids = timeline.getJSONArray("orderedIDs")
+    expectEq(entries.map { it.id }, (0 until ids.length()).map(ids::getString), "timeline order with timestamp and unknown ties")
+    val originals = taskHistogram.getValue(detailDay.key).taskSessions.associateBy { it.id }
+    expect(entries.all { it == originals[it.id] } && entries.takeLast(4).all { it.startedAt <= 0 },
+        "task title, minutes and original start stay with each session")
+    val aggregateOnly = taskReview.selectedDay(timeline.getString("legacyDay"))!!
+    expectEq(FocusReview.today(entries[2].startedAt, zone), aggregateOnly.date, "late session started the previous day")
+    expect(aggregateOnly.chronologicalTaskSessions.isEmpty() && aggregateOnly.pomodoros == 1 &&
+        detailDay.pomodoros == 8 && entries.size == 7, "cross-midnight attribution and aggregate-only focus")
+    val sessionOnly = taskReview.selectedDay(timeline.getString("sessionOnlyDay"))!!
+    expect(sessionOnly.hasRecords && sessionOnly.chronologicalTaskSessions.size == 1 &&
+        sessionOnly.pomodoros == 0 && sessionOnly.minutes == 0, "a day with session details needs no fabricated totals")
+    expect(detailDay.tasks.map { it.title } == listOf("定稿", "校对") && detailDay.tasks.map { it.minutes } == listOf(35, 35) &&
+        detailDay.tasks.map { it.pomodoros } == listOf(2, 5), "summaries retain latest task titles and aggregate counts")
+    expect(taskReview.totals.pomodoros == 9 && taskReview.totals.minutes == 105, "review totals come from stored aggregates")
+    val csvRows = timeline.getJSONArray("taskCSVRows")
+    expectEq(taskReview.taskCsv, (0 until csvRows.length()).map(csvRows::getString).joinToString("\r\n") + "\r\n",
+        "task CSV bytes retain their existing row order")
+
     val earliest = FocusReview.earliestDate(histogram, dailyBlocks, blockHistory, plants)
     expectEq(earliest?.toString(), dataset.getString("earliest"), "earliest skips invalid date and zero record")
     val empty = FocusReview(FocusReviewRange.MONTH, today, emptyMap(), emptyMap(), emptyMap(), emptyMap())

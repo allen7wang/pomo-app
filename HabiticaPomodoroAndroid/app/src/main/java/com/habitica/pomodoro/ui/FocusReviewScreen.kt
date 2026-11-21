@@ -27,6 +27,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material3.AlertDialog
@@ -45,6 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -65,6 +68,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -84,7 +88,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /** Read-only review of the local calendar-day stores; all aggregation lives in data/FocusReview.kt. */
@@ -107,6 +114,7 @@ fun FocusReviewScreen(state: PomodoroViewModel.UiState, onBack: () -> Unit, modi
     }
     val summary = remember(state.histogram) { FocusReviewHistorySummary.from(state.histogram) }
     val selected = review.selectedDay(nav.selectedKey)
+    var visibleSessionCount by rememberSaveable(selected?.key) { mutableIntStateOf(0) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val export = rememberCsvExport()
@@ -130,7 +138,9 @@ fun FocusReviewScreen(state: PomodoroViewModel.UiState, onBack: () -> Unit, modi
         }
         if (review.hasRecords && selected != null) {
             item { TrendCard(review.days, selected) { nav = nav.select(it) } }
-            item(key = "detail") { DayDetailCard(selected) }
+            item(key = "detail") {
+                DayDetailCard(selected, visibleSessionCount, onVisibleSessionsChange = { visibleSessionCount = it })
+            }
             item {
                 Text("有记录的日期 · ${recordedDays.size} 天", style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.semantics { heading() })
@@ -381,7 +391,7 @@ private fun TrendBars(days: List<FocusReviewDay>, selectedKey: String, onSelect:
 }
 
 @Composable
-private fun DayDetailCard(day: FocusReviewDay) {
+private fun DayDetailCard(day: FocusReviewDay, visibleSessions: Int, onVisibleSessionsChange: (Int) -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -396,12 +406,54 @@ private fun DayDetailCard(day: FocusReviewDay) {
                     Metric("${day.pomodoros}", "完成番茄", Modifier.weight(1f))
                     Metric("${day.completedBlocks}", "达标时间块", Modifier.weight(1f))
                 }
-                if (day.taskSessions.isNotEmpty()) TaskFocusBreakdown(day.tasks, day.pomodoros)
+                if (day.taskSessions.isNotEmpty()) {
+                    TaskFocusBreakdown(day.tasks, day.pomodoros)
+                    TaskSessionDetails(day, visibleSessions, onVisibleSessionsChange)
+                }
                 BlockDetails(day.blocks)
                 PlantDetails(day)
             } else {
                 Text("当天没有专注、时间块或种植记录。", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+private const val SESSION_PAGE_SIZE = 5
+private val startTimeFormat = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
+
+@Composable
+private fun TaskSessionDetails(day: FocusReviewDay, visibleCount: Int, onVisibleCountChange: (Int) -> Unit) {
+    val expanded = visibleCount > 0
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        TextButton(
+            onClick = { onVisibleCountChange(if (expanded) 0 else SESSION_PAGE_SIZE) },
+            modifier = Modifier.fillMaxWidth().semantics { stateDescription = if (expanded) "已展开" else "已折叠" },
+        ) {
+            Text("专注明细")
+            Spacer(Modifier.weight(1f))
+            Text("${day.taskSessions.size} 条")
+            Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null)
+        }
+        if (expanded) {
+            val sessions = remember(day.taskSessions) { day.chronologicalTaskSessions }
+            val zone = ZoneId.systemDefault()
+            for (session in sessions.take(visibleCount)) {
+                val time = if (session.startedAt <= 0) "开始时间未知" else {
+                    val start = Instant.ofEpochMilli(session.startedAt).atZone(zone)
+                    val clock = start.format(startTimeFormat)
+                    if (start.toLocalDate() == day.date) "$clock 开始" else "${start.toLocalDate()} $clock 开始"
+                }
+                Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+                    Text(session.title, style = MaterialTheme.typography.bodyMedium)
+                    Text("$time · ${session.minutes} 分钟", style = MaterialTheme.typography.bodySmall, color = muted)
+                }
+            }
+            if (visibleCount < sessions.size) {
+                val more = minOf(SESSION_PAGE_SIZE, sessions.size - visibleCount)
+                TextButton(onClick = { onVisibleCountChange(visibleCount + more) }) { Text("再显示 $more 条") }
             }
         }
     }
@@ -417,8 +469,9 @@ private fun TaskFocusBreakdown(tasks: List<FocusReviewTask>, totalPomodoros: Int
             Text("从今日任务开始并完成一个番茄，即可看到任务用时。",
                 style = MaterialTheme.typography.bodySmall, color = muted)
         } else {
-            Text("${tasks.sumOf { it.pomodoros }} / $totalPomodoros 个番茄关联了任务",
-                style = MaterialTheme.typography.bodySmall, color = muted)
+            val linked = tasks.sumOf { it.pomodoros }
+            val counts = if (linked <= totalPomodoros) "$linked / $totalPomodoros" else "$linked"
+            Text("$counts 个番茄关联了任务", style = MaterialTheme.typography.bodySmall, color = muted)
             for (task in if (expanded) tasks else tasks.take(5)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(task.title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)

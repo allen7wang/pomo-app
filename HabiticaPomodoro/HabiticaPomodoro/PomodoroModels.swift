@@ -405,6 +405,17 @@ struct TaskFocusSession: Codable, Equatable, Identifiable {
     let startedAt: Int64
 }
 
+extension TaskFocusSession {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        taskId = try c.decode(UUID.self, forKey: .taskId)
+        title = try c.decode(String.self, forKey: .title)
+        minutes = try c.decode(Int.self, forKey: .minutes)
+        startedAt = try c.decodeIfPresent(Int64.self, forKey: .startedAt) ?? 0
+    }
+}
+
 // Additive schema defaults keep old Mac/iPhone JSON readable.
 extension BlockTimeRange {
     init(from decoder: Decoder) throws {
