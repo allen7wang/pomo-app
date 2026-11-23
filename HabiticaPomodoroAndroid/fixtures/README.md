@@ -102,10 +102,11 @@ Suites:
   deletedCloudIds/origins (documented decision, comment-only change).
 - `fr_01..fr_03` — 专注复盘 (focus review), a pure-Kotlin port of Apple
   `FocusReview.swift` plus the paging/selection rules of `FocusReviewView.swift`:
-  `fr_01` runs the exact dataset of the Apple `focus_review` fixture (windows,
-  totals, block/plant projection, earliest record, 30/90-day boundaries) and
-  compares the 7- and 30-day CSV with bytes captured from the Apple
-  implementation (text + SHA-256); `fr_02` pins window paging from a fixed
+  `fr_01` uses the [shared Apple and Android dataset](../../parity/focus_review.json)
+  for calendar windows, totals, block/plant projection, earliest record, and
+  30/90-day boundaries. Both fixtures compare the full 7- and 30-day CSV exports
+  byte for byte against the same expected rows. The dataset also covers task
+  session ordering and task CSV compatibility. `fr_02` pins window paging from a fixed
   anchor, back/forward enablement, range reset, default day and the opened
   window/pick surviving midnight; `fr_03` feeds legacy `pomo_count` data
   through the real `LocalStore` migration and checks that unknown minutes stay
