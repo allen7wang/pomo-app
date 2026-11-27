@@ -1,97 +1,21 @@
-# Habitica Pomodoro / SiteKeeper
+# 专注番茄钟 Web
 
-本仓库同时保留原始浏览器扩展，以及目前维护的 macOS、iOS、Android 原生番茄钟。原生应用包含番茄计时、时间块、种植记录、每日三件事、Habitica 集成与栖时随机场景背景音。浏览器扩展在设置里把 Ambient source 选为 Qishi Random 后，专注番茄同样随机播放一个栖时场景混音：暂停后续同一场景，不与上一个番茄重复。
+静态运行包发布在本仓库 `workbench-runtime` 分支根目录。[原生应用及浏览器扩展](https://github.com/allen7wang/Habitica-Pomodoro-SiteKeeper)
 
-**Pomo 3.0.0 下载**　[macOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0) · [iOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-ios) · [Android](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-android)
+在浏览器里使用番茄计时、每日三件事和时间块。每次完成的专注可在 7 天或 30 天复盘中查看并导出为 CSV。专注进行时可以播放栖时随机场景：每个番茄换一个场景，暂停后继续同一场景，不与上一个番茄重复。声音来自同一私有站点上的栖时文件，不打包进本仓库。
 
-共用 iCloud 数据目录的 Mac 和 iPhone 请一起升级。Android 3.0.0 APK 与 GitHub 发布的 Android v1.2.6 签名不同，旧版用户请先保留原应用及数据。
+- 计时支持开始、暂停、继续、重置和长短休息。刷新后从保存的状态恢复；计时到期时网页暂停运行的话，回来后补记。
+- 工作和个人每天各可添加三件任务，琐事不设上限。未完成任务可移到今天。任务日从 04:00 开始，专注复盘按自然日统计。
+- 设置、任务和专注记录存于当前浏览器。Habitica 连接独立可选，凭据只留在当前页面内存，请求直接发送给 `habitica.com`。可以查看角色、为习惯打分和打卡，Web 本地任务与专注记录保留在本机。
 
-## 项目入口
+## 本地运行
 
-| 模块 | 安装与开发说明 |
-|---|---|
-| macOS / 三端概览 | [HabiticaPomodoro/README.md](HabiticaPomodoro/README.md) |
-| iOS / iCloud Drive 授权与重签 | [HabiticaPomodoro/iOS/README.md](HabiticaPomodoro/iOS/README.md) |
-| Android | [HabiticaPomodoroAndroid/README.md](HabiticaPomodoroAndroid/README.md) |
-| 业务规则、历次验证与待验收项 | [FEATURE_PARITY.md](HabiticaPomodoro/FEATURE_PARITY.md) |
-| Apple 离线回归 | [Apple fixtures](HabiticaPomodoro/fixtures/README.md) |
-| Android 离线回归 | [Android fixtures](HabiticaPomodoroAndroid/fixtures/README.md) |
-
-## 当前源码
-
-- 原生三端 **3.0.0** 新增[任务专注](HabiticaPomodoro/releases/v3.0.0.md)。从今日任务开始番茄，完成后在专注复盘查看各任务的用时、番茄数及 CSV 明细。
-- 三端共用七套皮肤。清新原生、留白花园与效率工作台更新了配色、排版、卡片和计时环，新增番茄经典、深夜航行、像素冒险与樱落。
-- iOS 与 Android 补齐专注复盘和 CSV，Android 同时补齐跨天未完成任务与 Habitica 请求保护。iOS 新增锁屏实时活动和主屏「今日任务」小组件。
-- Mac 与 iPhone 合并同一目录中可见的 Top 3 并发修订，保留不同任务的新增和同一任务不同字段的修改。其它文件采用各自原有的保存规则。
-- 共享日界与复盘场景见 [跨平台业务回归](parity/README.md)，构建、同步及设备验收状态见 [功能验收清单](HabiticaPomodoro/FEATURE_PARITY.md)。
-
-## 版本与同步边界
-
-- **[macOS v2.1.4](https://github.com/allen7wang/pomo-app/releases/tag/v2.1.4)**：修复并发响应清除新错误、旧角色响应恢复失效认证，以及账号切回后复用旧读取的问题；切换连接期间保留已发送写操作的真实结果和原账号限额。主程序与今日任务小组件均为 build 18，详见[更新说明](HabiticaPomodoro/releases/v2.1.4.md)。
-- **[macOS v2.1.3](https://github.com/allen7wang/pomo-app/releases/tag/v2.1.3)**：修复新建任务被本地额度、HTTP 401/429 拒绝后无法再次上传的问题；习惯与每日任务遇到异常响应时保留已加载列表。主程序与今日任务小组件均为 build 17，详见[更新说明](HabiticaPomodoro/releases/v2.1.3.md)。
-- **[macOS v2.1.2](https://github.com/allen7wang/pomo-app/releases/tag/v2.1.2)**：Habitica 各功能共享请求额度，遇到限流时提示等待；已确认的删除不再重复请求，离线待同步任务与删除进度保留。主程序与今日任务小组件均为 build 16，详见[更新说明](HabiticaPomodoro/releases/v2.1.2.md)。
-- **macOS v2.1.1**：任务页将今天、昨天放在上方，未完成任务放在下方；效率工作台保留今天/昨天并排布局。
-- **macOS v2.1.0**：任务页新增「未完成任务」，收集昨天及更早仍未完成的任务，可删除或转到今天的原分类。
-- **macOS v2.0.1**：启动时先显示窗口，再读取「文稿」中的记录。读取失败可重试。复盘默认展示最近有记录的一天，跨午夜翻阅时保留当前日期区间。
-- **macOS v2.0.0**：新增「专注复盘」，可回看近 7、30、90 天及更早的日期，查看番茄次数、专注时长、时间块进度与种植记录，并导出当前日期范围的 CSV。复盘直接读取已有记录。
-- 2026-10-28 发布 **[macOS v1.2.7](https://github.com/allen7wang/pomo-app/releases/tag/v1.2.7)**：任务、习惯、每日、角色四页补齐三套皮肤（清新原生 / 留白花园 / 效率工作台）及深浅色适配，统一卡片与操作控件，修复花园风格的滚动和留白。通过主窗口右上角调色板或 设置 → 外观 切换。iOS / Android 仍为 v1.2.5。
-- v1.2.5 已包含云文件读取防卡顿、Apple 暂停/试听资源隔离、前台到期补记顺序修复及 CI/离线回归改进；macOS v1.2.6 / v1.2.7 在其基础上只改展示层。
-- Mac/iPhone 授权同一 iCloud Drive 父目录后共享 JSON；Android 只经 Habitica 交换带应用日期/分类标记的 Task，设置与历史不做三端云同步。
-- 首次使用自行配置 Habitica 凭据；不配置也可离线使用。发布物不应携带个人账号或运行数据。
-
-## 开发与验证
+使用当前浏览器，从仓库根目录启动静态文件服务器，然后打开 `http://localhost:8765/`。
 
 ```sh
-# macOS：需要完整 Xcode 和 xcodegen（Widget 需 xcodebuild，只有 Command Line Tools 不够）
-(cd HabiticaPomodoro && bash build.sh)
-# iOS：仅编译，不安装或启动设备
-(cd HabiticaPomodoro && bash build_ios.sh --no-install)
-# Apple：隔离存储、无实际音频或 Habitica 请求
-python3 HabiticaPomodoro/fixtures/run.py --work "$HOME/Library/Caches/HabiticaPomodoroFixtures"
-# Android：先将 JAVA_HOME 指向 JDK 21，工具链可复用本机缓存
-python3 HabiticaPomodoroAndroid/fixtures/run.py --work "$HOME/Library/Caches/HabiticaPomodoroAndroidFixtures"
+python3 -m http.server 8765 --bind 127.0.0.1
 ```
 
-CI 定义见 [build.yml](.github/workflows/build.yml)：master push、面向 master 的 PR、版本 tag 与手动触发；离线回归先于构建，远端结果以 GitHub Actions 实际记录为准。CI 收集构建产物，不自动发布 Release。离线通过不等于真实声音、设备后台、Habitica 在线流程或 iCloud 跨设备传播已验收。
+## 发布
 
-## 原始浏览器扩展（历史说明）
-
-以下保留上游扩展的功能、安装和调试说明；原生客户端请使用上方入口。
-
-### Description:
-This extension has two main features:
-
-**1. "Pay to Pass" Website Blocker:**
-Website Blocker that plugs into Habitica and limits you from visiting websites that you decide. You can decide to visit these sites by spending Habitica currency, which you'll earn by developing good habits and doing chores.
-
-**2. Pomodoro Timer:**
-Including a Pomodoro Timer.
-You can read about the pomodoro technique here:
-https://habitica.fandom.com/wiki/Pomodoro
-
-During Pomodoro mode, all websites in the list are blocked, websites with cost 0 are blocked only during pomodoro.
-A Pomodoro habit is created automatically for the user in Habitica, with an option in the extension settings to automatically score [+] or [-] of the habit when a Pomodoro is done successfully or fails accordingly.
-
-### How to use:
-After installing the extension, click on the icon at the top right to open the menu. In here, you must set your API Credentials. You can then block a site by navigating to it and clicking block site. It will ask you to enter a cost. From this point on, when you visit this site, the extension will ask you if you'd like to spend GP to access it. To start a pomodoro timer simply click on the Tomato character. Click again to stop the timer. In the settings you will find a lot of option that allow you tweak and change the pomodoro behavior to fit best for you.
-
------------------------------------------
-
-For more information, recommended settings and version update log:
-https://habitica.fandom.com/wiki/Habitica_Pomodoro_SiteKeeper
-
-Bug reports and Feature requests are welcome! https://github.com/ofekmiz/Habitica-Pomodoro-SiteKeeper/issues
-
-If you like this project and want to support, you can buy me a coffe :) https://ko-fi.com/ofexcoffee
-
-### Debuging in Firefox:
-To test the extension in firefox go to the url "about:debugging" => This firefox => Load Temporary add-on => choose manifest.json file in the app folder.
-
-*Before installing, add the following option to manifest.json to allow using local storage to the temporary add-on:
-
-    "browser_specific_settings": {
-        "gecko": {
-            "id": "{9ed782e5-6280-4bed-bece-dea374ea9c2f}",
-            "strict_min_version": "42.0"
-        }
-    }
+本仓库作为 `project-management/private-web` 的 `habitica-pomodoro-web` 运行仓库，入口由统一工作台的 Google 登录保护。所有页面资源使用相对路径，`index.html` 可直接部署，无需构建或第三方前端依赖。

@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Keep nonsecret history while excluding the plaintext Habitica API token in settings. -->
-<full-backup-content>
-    <include domain="file" path="." />
-    <exclude domain="file" path=".habitica-pomodoro/habitica_pomodoro_settings.json" />
-        <exclude domain="file" path=".habitica-pomodoro/habitica_pomodoro_settings.json.pending" />
-        <exclude domain="file" path=".habitica-pomodoro/habitica_pomodoro_timer.json" />
-        <exclude domain="file" path=".habitica-pomodoro/habitica_pomodoro_timer.json.pending" />
-</full-backup-content>
