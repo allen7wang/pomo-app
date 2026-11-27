@@ -2,11 +2,11 @@
 
 macOS、iOS、Android 共用业务规则与记录口径，界面采用各端原生布局。
 
-## 当前状态（2026-11-21）
+## 当前状态（2026-11-28）
 
 | 状态 | 范围 |
 |---|---|
-| 发布版本 | 3.0.0 · [macOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0)、[iOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-ios)、[Android](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-android) |
+| 发布版本 | 3.2.0 · [macOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.2.0)、[iOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.2.0-ios)、[Android](https://github.com/allen7wang/pomo-app/releases/tag/v3.2.0-android) |
 | 当前源码 | 三端支持[单日任务专注明细](releases/v3.2.0.md)。macOS 3.2.0（build 23）、iOS 3.2.0（build 10）、Android 3.2.0（versionCode 9） |
 | 回归入口 | [Apple fixtures](fixtures/README.md)、[Android fixtures](../HabiticaPomodoroAndroid/fixtures/README.md)、[共享场景](../parity/README.md) |
 | 待设备验收 | Habitica 在线和账号切换、真实音频与锁屏后台、iCloud 跨设备传送、iOS 实际重签和主屏小组件、Android 真机 |
