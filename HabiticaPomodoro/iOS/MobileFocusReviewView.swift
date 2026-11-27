@@ -425,7 +425,8 @@ struct MobileFocusReviewDayView: View {
                     }
                     .themeCard(theme, padding: theme.cardPadding)
                     if !day.taskSessions.isEmpty {
-                        TaskFocusBreakdown(tasks: day.tasks, totalPomodoros: day.pomodoros)
+                        TaskFocusDayDetails(day: day)
+                            .id(day.id)
                             .themeCard(theme, padding: theme.cardPadding)
                     }
                     blocksCard

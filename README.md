@@ -2,9 +2,9 @@
 
 本仓库同时保留原始浏览器扩展，以及目前维护的 macOS、iOS、Android 原生番茄钟。原生应用包含番茄计时、时间块、种植记录、每日三件事、Habitica 集成与栖时随机场景背景音。浏览器扩展在设置里把 Ambient source 选为 Qishi Random 后，专注番茄同样随机播放一个栖时场景混音：暂停后续同一场景，不与上一个番茄重复。
 
-**Pomo 3.0.0 下载**　[macOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0) · [iOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-ios) · [Android](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-android)
+**Pomo 3.2.0 下载**　[macOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.2.0) · [iOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.2.0-ios) · [Android](https://github.com/allen7wang/pomo-app/releases/tag/v3.2.0-android)
 
-共用 iCloud 数据目录的 Mac 和 iPhone 请一起升级。Android 3.0.0 APK 与 GitHub 发布的 Android v1.2.6 签名不同，旧版用户请先保留原应用及数据。
+共用 iCloud 数据目录的 Mac 和 iPhone 请一起升级。Android 3.2.0 与 3.0.0 签名相同，可直接覆盖安装。GitHub 发布的 Android v1.2.6 签名不同，无法覆盖安装，旧版用户请先保留原应用及数据。
 
 ## 项目入口
 
@@ -19,6 +19,8 @@
 
 ## 当前源码
 
+- 三端 **3.2.0** 可以在专注复盘中选一天，展开「专注明细」，按开始时间回看每个任务番茄的标题和分钟数。[更新说明](HabiticaPomodoro/releases/v3.2.0.md)
+- macOS / iOS **3.1.1** 支持在历史保存失败后重试。番茄到期后，即使应用在写入历史时再次退出，重新打开仍可补记这次专注的次数、分钟和关联任务。同一次专注只计入一次。[更新说明](HabiticaPomodoro/releases/v3.1.1.md)
 - 原生三端 **3.0.0** 新增[任务专注](HabiticaPomodoro/releases/v3.0.0.md)。从今日任务开始番茄，完成后在专注复盘查看各任务的用时、番茄数及 CSV 明细。
 - 三端共用七套皮肤。清新原生、留白花园与效率工作台更新了配色、排版、卡片和计时环，新增番茄经典、深夜航行、像素冒险与樱落。
 - iOS 与 Android 补齐专注复盘和 CSV，Android 同时补齐跨天未完成任务与 Habitica 请求保护。iOS 新增锁屏实时活动和主屏「今日任务」小组件。

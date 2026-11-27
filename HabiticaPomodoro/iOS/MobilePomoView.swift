@@ -21,7 +21,13 @@ struct MobilePomoView: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            Group {
+            VStack(spacing: theme.rowSpacing) {
+                if let warning = engine.focusRecoveryWarning {
+                    Text(warning)
+                        .font(.caption)
+                        .foregroundStyle(theme.danger)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 switch theme.layout {
                 case .compact: compactFocus
                 case .airy: airyFocus
@@ -135,7 +141,7 @@ struct MobilePomoView: View {
                     Text(dateLine)
                         .font(theme.sectionFont(size: 15))
                         .foregroundColor(theme.ink)
-                    Text("今天 \(engine.todayPomodoros) 次 · \(engine.todayPomodoros * settings.pomoDurationMins) 分钟")
+                    Text("今天 \(engine.todayPomodoros) 次 · \(engine.todayFocusMinutes) 分钟")
                         .font(theme.numberFont(size: 12, weight: .regular))
                         .foregroundColor(theme.muted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -289,7 +295,7 @@ struct MobilePomoView: View {
                 Text("\(engine.todayPomodoros) 次")
             }
             Text("·").foregroundColor(theme.line)
-            Text("\(engine.todayPomodoros * settings.pomoDurationMins) 分钟")
+            Text("\(engine.todayFocusMinutes) 分钟")
             Text("·").foregroundColor(theme.line)
             Text("第 \(engine.pomoSetCounter + 1) / \(settings.pomoSetNum) 个")
             Spacer(minLength: 0)

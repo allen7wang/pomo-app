@@ -6,12 +6,19 @@ struct SharedFocusReviewDataset: Decodable {
         let start, end, defaultDay: String
         let csvRows: [String]?
     }
+    struct TaskTimeline: Decodable {
+        let day, legacyDay, sessionOnlyDay: String
+        let histogram: Histogram
+        let orderedIDs: [UUID]
+        let taskCSVRows: [String]
+    }
     let instant, zone, earliest: String
     let histogram: Histogram
     let dailyBlocks: DailyBlocksHistory
     let blockHistory: BlockHistory
     let plants: [String: PlantDay]
     let windows: [Window]
+    let taskTimeline: TaskTimeline
 }
 
 let parityRoot = URL(fileURLWithPath: ProcessInfo.processInfo.environment["POMO_FIXTURE_REPO_ROOT"]!)
@@ -68,6 +75,32 @@ let emptyCSV = FocusReview(range: .week, now: now, histogram: [:], dailyBlocks: 
 precondition(emptyCSV.components(separatedBy: "\r\n").count == 9 && emptyCSV.hasSuffix(",0,0,0,0,0,0\r\n"))
 print("PASS CSV includes all selected dates and excludes goals and out-of-window records")
 print("PASS CSV filename names the exported range; an empty range still exports zero rows")
+
+let timeline = dataset.taskTimeline
+let taskReview = FocusReview(range: .week, now: now, histogram: timeline.histogram, dailyBlocks: [:],
+                             blockHistory: [:], plants: [:], calendar: calendar)
+let detailDay = taskReview.selectedDay(timeline.day)!
+let entries = detailDay.chronologicalTaskSessions
+let originals = Dictionary(uniqueKeysWithValues: timeline.histogram[timeline.day]!.taskSessions!.map { ($0.id, $0) })
+precondition(entries.map(\.id) == timeline.orderedIDs && entries.allSatisfy { originals[$0.id] == $0 })
+precondition(entries.suffix(4).allSatisfy { $0.startedAt <= 0 })
+print("PASS task timeline preserves snapshots, breaking ties and ordering unknown starts by session ID")
+
+let aggregateOnly = taskReview.selectedDay(timeline.legacyDay)!
+let previousStart = Date(timeIntervalSince1970: Double(entries[2].startedAt) / 1000)
+precondition(FocusReview.dateKeyFormatter(calendar: calendar).string(from: previousStart) == aggregateOnly.id)
+precondition(aggregateOnly.chronologicalTaskSessions.isEmpty && aggregateOnly.pomodoros == 1 &&
+             detailDay.pomodoros == 8 && entries.count == 7)
+let sessionOnly = taskReview.selectedDay(timeline.sessionOnlyDay)!
+precondition(sessionOnly.hasRecords && sessionOnly.chronologicalTaskSessions.count == 1 &&
+             sessionOnly.pomodoros == 0 && sessionOnly.minutes == 0)
+print("PASS cross-midnight focus stays on its completion day and legacy counts and sessions are independent")
+
+precondition(detailDay.tasks.map(\.title) == ["定稿", "校对"] && detailDay.tasks.map(\.minutes) == [35, 35] &&
+             detailDay.tasks.map(\.pomodoros) == [2, 5])
+precondition(taskReview.totals.pomodoros == 9 && taskReview.totals.minutes == 105)
+precondition(taskReview.taskCSV == timeline.taskCSVRows.joined(separator: "\r\n") + "\r\n")
+print("PASS session details preserve task totals, latest titles and the original task CSV row order")
 
 // Earlier windows are counted from a fixed anchor, so paging survives midnight.
 let today = calendar.startOfDay(for: now)

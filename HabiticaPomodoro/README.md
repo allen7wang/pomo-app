@@ -16,7 +16,7 @@ macOS / iOS 客户端在本机统一管理各功能的 Habitica 请求额度：�
 
 **Mac ↔ iPhone 数据同步**：Mac 与 iPhone 登录同一 Apple ID 并在 iOS 授权 iCloud Drive 文件夹后，读写 `Documents/.habitica-pomodoro/` 中的七类 JSON 数据文件。系统负责跨设备传送；Top 3 任务文件在保存或采纳其他设备的修改时按任务合并（双方新增都保留，同一字段取较新的修改，删除优先），其余文件同时编辑仍可能最后写入覆盖。Android 无法读取该 iCloud 目录，只经 Habitica todo 导入已上传、带应用日期与分类标记的 Top 3 任务；纯本地任务、设置及历史不通过 Habitica 同步。
 
-> **Pomo 3.0.0** 支持从今日任务启动番茄，并在专注复盘查看任务用时。共用 iCloud 数据目录的 Mac 和 iPhone 请一起升级。[macOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0) · [iOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-ios) · [Android](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-android)
+> **Pomo 3.2.0** 可在专注复盘中按天展开「专注明细」，逐条查看任务番茄。Mac 和 iPhone 在退出或崩溃后重新打开，会恢复进行中的专注。共用 iCloud 数据目录的 Mac 和 iPhone 请一起升级。[macOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.2.0) · [iOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.2.0-ios) · [Android](https://github.com/allen7wang/pomo-app/releases/tag/v3.2.0-android)
 
 当前源码提供七套皮肤，可从调色板或「设置 → 外观」切换，选择保存在本机。配色和形状等设计值由 `design/skins.json` 生成，修改后运行 `python3 design/gen_skins.py` 并用 `--check` 检查两份生成文件。
 
@@ -81,7 +81,7 @@ macOS / iOS 客户端在本机统一管理各功能的 Habitica 请求额度：�
 
 ## 安装 — macOS
 
-1. 从 [macOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0) 下载 `HabiticaPomodoro-3.0.0-Installer.dmg`
+1. 从 [macOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.2.0) 下载 `HabiticaPomodoro-3.2.0-Installer.dmg`
 2. 打开 DMG，将应用拖入 Applications
 3. 首次打开如提示无法验证开发者：右键应用 → 打开，或在「系统设置 → 隐私与安全性」中允许
 4. 在 Settings → Habitica 中填入你的 User ID 与 API Token（Habitica 网站 → Settings → API）
@@ -123,7 +123,7 @@ bash build_ios.sh --no-install # 仅编译
 
 ### 方式 B：未签名 .ipa + 第三方重签工具
 
-从 [iOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-ios) 下载 `HabiticaPomodoro-iOS-3.0.0-unsigned.ipa`，用自己的 Apple ID 重签后安装。AltStore 或 SideStore 可用于重签和刷新签名。
+从 [iOS](https://github.com/allen7wang/pomo-app/releases/tag/v3.2.0-ios) 下载 `HabiticaPomodoro-iOS-3.2.0-unsigned.ipa`，用自己的 Apple ID 重签后安装。AltStore 或 SideStore 可用于重签和刷新签名。
 
 > 下载包仅附 ad-hoc 签名和 App Group 权限声明，安装需要签名工具为自己的账号重新配置。
 
@@ -138,9 +138,9 @@ bash build_ios.sh --no-install # 仅编译
 
 ## 安装 — Android
 
-> **Android 升级说明**　GitHub 发布的 Android v1.2.6 与 3.0.0 使用不同证书，系统会拒绝覆盖安装。3.0.0 APK 适用于全新安装或签名相同的旧安装。已有本机数据的用户请先保留旧应用并备份。
+> **Android 升级说明**　3.2.0 与 GitHub 发布的 3.0.0 使用同一证书，可直接覆盖安装并保留本机数据。GitHub 发布的 Android v1.2.6 使用不同证书，系统会拒绝覆盖安装，仍需卸载后重新安装。已有本机数据的用户请先保留旧应用并备份。
 
-1. 从 [Android](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-android) 下载 `HabiticaPomodoro-Android-3.0.0.apk`
+1. 从 [Android](https://github.com/allen7wang/pomo-app/releases/tag/v3.2.0-android) 下载 `HabiticaPomodoro-Android-3.2.0.apk`
 2. 传到手机，点击安装（需允许「安装未知来源应用」）
 3. 打开 App → 设置 → 填写 Habitica User ID 与 API Token
 

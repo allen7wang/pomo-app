@@ -270,7 +270,8 @@ struct FocusReviewView: View {
                     metric("\(day.completedBlocks)", caption: "达标时间块")
                 }
                 if !day.taskSessions.isEmpty {
-                    TaskFocusBreakdown(tasks: day.tasks, totalPomodoros: day.pomodoros)
+                    TaskFocusDayDetails(day: day)
+                        .id(day.id)
                 }
                 blockDetails(day.blocks)
                 plantDetails(day)

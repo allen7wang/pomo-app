@@ -48,7 +48,15 @@ struct FocusReviewDay: Identifiable {
     var taskSessions: [TaskFocusSession] = []
 
     var tasks: [FocusReviewTask] { FocusReviewTask.summarize(taskSessions) }
-    var hasRecords: Bool { pomodoros > 0 || minutes > 0 || !blocks.isEmpty }
+    var chronologicalTaskSessions: [TaskFocusSession] {
+        taskSessions.sorted { left, right in
+            let leftStart = max(0, left.startedAt)
+            let rightStart = max(0, right.startedAt)
+            if leftStart != rightStart { return leftStart > rightStart }
+            return left.id.uuidString < right.id.uuidString
+        }
+    }
+    var hasRecords: Bool { pomodoros > 0 || minutes > 0 || !blocks.isEmpty || !taskSessions.isEmpty }
     var completedBlocks: Int { blocks.filter(\.isCompleted).count }
     var shrubs: Int { blocks.reduce(0) { $0 + $1.shrubs } }
     var trees: Int { blocks.reduce(0) { $0 + $1.trees } }

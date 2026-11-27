@@ -135,7 +135,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             _ = TopThreeManager.shared
             _ = PlantJournal.shared
             _ = HistogramManager.shared
-            PomodoroEngine.shared.loadTodayCount()
+            let engine = PomodoroEngine.shared
+            engine.loadTodayCount()
+            engine.restoreFocusAfterLaunch()
             self.dataStatus = .ready
             DispatchQueue.main.async { self.startRuntimeServices() }
         }
@@ -317,6 +319,16 @@ struct TimerView: View {
             case .compact: compactLayout
             case .airy: airyLayout
             case .columns: columnsLayout
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let warning = engine.focusRecoveryWarning {
+                Text(warning)
+                    .font(.caption)
+                    .foregroundStyle(theme.danger)
+                    .frame(maxWidth: .infinity)
+                    .padding(8)
+                    .background(theme.surface)
             }
         }
         .frame(width: theme.macWindowSize.width,
