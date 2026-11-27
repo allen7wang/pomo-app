@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f7f1">
+  <meta name="description" content="专注番茄钟。用番茄计时、每日三件事和时间块，安排今天的专注。">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://habitica.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>专注番茄钟 · Habitica Pomodoro</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-sprout" viewBox="0 0 24 24"><path d="M12 21v-8m0 4c-1-5-4-7-9-7 0 5 3 7 9 7Zm0-3c1-5 4-7 9-7-1 5-4 7-9 7ZM7 21h10"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6m3 4 2-2"/></symbol>
+    <symbol id="i-task" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="16" rx="3"/><path d="m8.5 12 2.2 2.3 4.8-5M9 4V3m6 1V3"/></symbol>
+    <symbol id="i-review" viewBox="0 0 24 24"><path d="M4 4v16h16M8 16v-4m5 4V8m5 8v-6"/></symbol>
+    <symbol id="i-habitica" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 4 4 7 8 9 4-2 8-5 8-9V6l-8-3Z"/><path d="M12 8v7m-3-3.5h6"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2.5" fill="var(--icon-fill, #f6f7f1)"/><circle cx="15" cy="17" r="2.5" fill="var(--icon-fill, #f6f7f1)"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3v4m8-4v4M4 10h16"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13m-5-5 5 5-5 5"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m9 5 10 7-10 7z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 6v12m6-12v12" stroke-width="2.6"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M4 6v5h5M4.5 11a8 8 0 1 1 1.7 6.7"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14m-7-7v14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="m14 6 4 4M5 19l4-.8L20 7.3 16.7 4 5.8 15 5 19Z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 10h4l5-4v12l-5-4H4v-4Zm12-1c2 1.5 2 4.5 0 6m2.5-8c3.5 2.5 3.5 7.5 0 10"/></symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 10h4l5-4v12l-5-4H4v-4Zm12 0 4 4m0-4-4 4"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11m-4-4 4 4 4-4m-11 5v4h14v-4"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></symbol>
+  </svg>
+  <a class="skip" href="#content">跳到主要内容</a>
+  <div class="app-shell">
+    <aside class="rail" aria-label="工作台侧栏">
+      <a class="brand" href="#focus">
+        <img src="./icon.svg" alt="" width="38" height="38">
+        <span><strong>专注番茄钟</strong><small>HABITICA POMODORO</small></span>
+      </a>
+      <div class="rail-label">工作台</div>
+      <nav class="nav" aria-label="主要导航">
+        <a href="#focus" data-view="focus" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg>专注</a>
+        <a href="#tasks" data-view="tasks"><svg class="icon" aria-hidden="true"><use href="#i-task"/></svg>每日任务</a>
+        <a href="#review" data-view="review"><svg class="icon" aria-hidden="true"><use href="#i-review"/></svg>专注复盘</a>
+        <a href="#habitica" data-view="habitica"><svg class="icon" aria-hidden="true"><use href="#i-habitica"/></svg>Habitica</a>
+      </nav>
+      <div class="rail-foot">
+        <span class="local-label"><span></span> 本地工作区</span>
+        <a href="https://github.com/allen7wang/habitica-pomodoro-web">Web 源码 <span aria-hidden="true">↗</span></a>
+      </div>
+    </aside>
+    <main id="content" class="main" tabindex="-1">
+      <header class="topbar">
+        <div class="topbar-date"><svg class="icon" aria-hidden="true"><use href="#i-calendar"/></svg><time id="current-date"></time></div>
+        <div class="integration-actions"><a id="hub-return" class="button button-quiet" href="/" hidden><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg>项目入口</a>
+          <button class="button button-quiet" type="button" data-action="settings"><svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg>设置</button></div>
+      </header>
+      <noscript><p class="notice">请启用 JavaScript 后使用专注番茄钟。</p></noscript>
+      <p id="storage-error" class="notice" role="status" hidden></p>
+      <section id="view-focus" aria-labelledby="focus-title">
+        <div class="page-heading"><div><p class="eyebrow">FOCUS STUDIO</p><h1 id="focus-title">专注工作台</h1><p>定下一件事，留出一个番茄的时间。</p></div><div id="daily-total" class="today-pill"></div></div>
+        <div class="focus-grid">
+          <article class="timer-card" aria-labelledby="timer-title">
+            <div class="timer-pattern" aria-hidden="true"></div>
+            <div class="timer-content">
+              <div class="timer-top"><h2 id="timer-title"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg> 番茄计时</h2><span id="timer-state" class="timer-state">准备就绪</span></div>
+              <div class="phase-switch" aria-label="计时阶段"><button data-phase="focus" aria-pressed="true">专注</button><button data-phase="short" aria-pressed="false">短休息</button><button data-phase="long" aria-pressed="false">长休息</button></div>
+              <div class="clock-face">
+                <svg class="clock-ring" viewBox="0 0 240 240" aria-hidden="true"><circle class="clock-track" cx="120" cy="120" r="110"/><circle id="clock-progress" class="clock-progress" cx="120" cy="120" r="110" pathLength="100" stroke-dasharray="100"/></svg>
+                <div><div id="clock" class="clock" role="timer">25:00</div><p id="clock-caption">准备开始</p><p id="qishi-scene" class="qishi-scene" hidden></p></div>
+              </div>
+              <div class="timer-actions">
+                <button id="timer-primary" class="button button-lime" type="button" data-action="timer"></button>
+                <button class="button button-glass" id="timer-reset" type="button" data-action="reset" title="重置计时" aria-label="重置计时"><svg class="icon" aria-hidden="true"><use href="#i-reset"/></svg></button>
+                <button class="button button-glass" id="sound-toggle" type="button" data-action="sound"></button>
+              </div>
+              <div class="timer-foot"><span id="round-progress" class="round-progress"></span><label id="focus-task-label" for="focus-task" class="task-picker"><svg class="icon" aria-hidden="true"><use href="#i-task"/></svg><select id="focus-task" aria-label="本次专注任务"></select></label></div>
+            </div>
+          </article>
+          <div class="focus-side">
+            <article class="panel" id="task-preview"></article>
+            <article class="panel block-panel" id="current-block"></article>
+          </div>
+          <article class="panel week-panel" id="week-preview"></article>
+        </div>
+      </section>
+      <section id="view-tasks" aria-labelledby="tasks-title" hidden>
+        <div class="page-heading"><div><p class="eyebrow">DAILY PRIORITIES</p><h1 id="tasks-title">每日任务</h1><p>工作和个人各留三件要事，琐事另外整理。</p></div><button class="button button-primary" type="button" data-action="add" data-category="work"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg> 添加任务</button></div>
+        <div id="task-board"></div>
+      </section>
+      <section id="view-review" aria-labelledby="review-title" hidden>
+        <div class="page-heading"><div><p class="eyebrow">FOCUS REVIEW</p><h1 id="review-title">专注复盘</h1><p>回看完成的番茄、专注时长和时间块。</p></div><button class="button button-quiet" type="button" data-action="export"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg> 导出 CSV</button></div>
+        <div id="review-body"></div>
+      </section>
+      <section id="view-habitica" aria-labelledby="habitica-title" hidden>
+        <div class="page-heading"><div><p class="eyebrow">HABITICA CONNECTION</p><h1 id="habitica-title">Habitica</h1><p>查看角色、记录习惯和完成每日打卡。</p></div></div>
+        <div id="habitica-body"></div>
+      </section>
+    </main>
+  </div>
+  <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+  <div id="status" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
