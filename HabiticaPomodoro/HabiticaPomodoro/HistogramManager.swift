@@ -137,6 +137,40 @@ class HistogramManager: ObservableObject {
         return formatter.string(from: date)
     }
     func getToday() -> DayHistogram? { histogram[todayKey()] }
+
+    /// The receipt and both totals become visible together, after the atomic file write.
+    /// Always check disk as a previous process may have committed just before exiting.
+    func recordFocus(id: UUID, minutes: Int, date: Date, taskSession: TaskFocusSession?) -> Bool {
+        if let taskSession, taskSession.id != id || taskSession.minutes != minutes { return false }
+        let url = fileURL
+        if loadedPath != url.path {
+            reload()
+            guard loadedPath == url.path && fileURL.path == url.path else { return false }
+        }
+        do {
+            let disk = try readBeforeWrite(at: url)
+            if disk?.values.contains(where: { $0.containsFocus(id) }) == true { return true }
+
+            var updated = histogram
+            if !updated.values.contains(where: { $0.containsFocus(id) }) {
+                let key = todayKey(date: date)
+                var day = updated[key] ?? DayHistogram(pomodoros: 0, minutes: 0, weekday: weekday(date: date))
+                if let taskSession {
+                    day.taskSessions = (day.taskSessions ?? []) + [taskSession]
+                } else {
+                    day.unassignedFocusIDs = (day.unassignedFocusIDs ?? []) + [id]
+                }
+                day.pomodoros += 1
+                day.minutes += minutes
+                updated[key] = day
+            }
+            try write(updated, at: url)
+            return true
+        } catch {
+            return false // The engine retains the checkpoint for another attempt.
+        }
+    }
+
     func incrementToday(pomodoros: Int, minutes: Int, date: Date = Date(), taskSession: TaskFocusSession? = nil) {
         if loadedPath != fileURL.path { reload() }
         let dateKey = todayKey(date: date)
@@ -166,36 +200,49 @@ class HistogramManager: ObservableObject {
             // this save attempt must still own dirty protection if its write fails.
             PomodoroFileChanges.shared.noteLocalMutation(fileURL)
         }
-        if FileManager.default.fileExists(atPath: fileURL.path) {
-            guard let disk = try? Data(contentsOf: fileURL),
-                  let remote = try? JSONDecoder().decode(Histogram.self, from: disk) else {
-                if let data = try? JSONEncoder().encode(histogram) { Self.rememberBackup(data, at: fileURL) }
-                return false
-            }
-            if disk != loadedData || loadedPath != fileURL.path {
-                if !replacingAll {
-                    histogram = loadedPath == fileURL.path ? mergingUnwrittenChanges(into: remote) : remote
-                }
-                loadedHistogram = remote
-                loadedData = disk
-                loadedPath = fileURL.path
-                PomodoroFileChanges.shared.consume(fileURL, data: disk)
-            }
-        }
-        guard let data = try? JSONEncoder().encode(histogram) else { return false }
-        Self.rememberBackup(data, at: fileURL)
+        let url = fileURL
         do {
-            try data.write(to: fileURL, options: .atomic)
-            loadedHistogram = histogram
-            loadedData = data
-            loadedPath = fileURL.path
-            PomodoroDataDir.noteLocalWrite(fileName, data: data)
-            NotificationCenter.default.post(name: .histogramChanged, object: nil)
+            _ = try readBeforeWrite(at: url, replacingAll: replacingAll)
+            try write(histogram, at: url)
             return true
         } catch {
+            if let data = try? JSONEncoder().encode(histogram) { Self.rememberBackup(data, at: url) }
             print("Error saving histogram: \(error)")
             return false
         }
+    }
+
+    private func readBeforeWrite(at url: URL, replacingAll: Bool = false) throws -> Histogram? {
+        let disk: Data
+        do {
+            disk = try Data(contentsOf: url)
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            return nil
+        }
+        if disk == loadedData && loadedPath == url.path { return loadedHistogram }
+        let remote = try JSONDecoder().decode(Histogram.self, from: disk)
+        let merged: Histogram
+        if replacingAll { merged = histogram }
+        else if loadedPath == url.path { merged = mergingUnwrittenChanges(into: remote) }
+        else { merged = remote }
+        loadedHistogram = remote
+        loadedData = disk
+        loadedPath = url.path
+        PomodoroFileChanges.shared.consume(url, data: disk)
+        if merged != histogram { histogram = merged }
+        return remote
+    }
+
+    private func write(_ updated: Histogram, at url: URL) throws {
+        let data = try JSONEncoder().encode(updated)
+        try data.write(to: url, options: .atomic)
+        loadedHistogram = updated
+        loadedData = data
+        loadedPath = url.path
+        Self.rememberBackup(data, at: url)
+        if histogram != updated { histogram = updated }
+        PomodoroDataDir.noteLocalWrite(fileName, data: data)
+        NotificationCenter.default.post(name: .histogramChanged, object: nil)
     }
 
     // Statistics

@@ -2,7 +2,7 @@
 
 Kotlin + Jetpack Compose 客户端。以 macOS 的可移植业务为基准，不机械复制桌面布局。
 
-> **当前版本**为 [3.0.0（versionCode 8）](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-android)，支持任务专注、按任务复盘及 CSV 导出。验收记录见 [三端功能清单](../HabiticaPomodoro/FEATURE_PARITY.md)。
+> **当前源码为 3.2.0（versionCode 9）**。在专注复盘中选一天，展开「专注明细」可逐次查看任务番茄。[更新说明](../HabiticaPomodoro/releases/v3.2.0.md) · [GitHub 已发布的 3.0.0 安装包](https://github.com/allen7wang/pomo-app/releases/tag/v3.0.0-android)
 
 > **从 GitHub v1.2.6 升级**　GitHub 发布的 Android v1.2.6 与 3.0.0 使用不同证书，系统会拒绝覆盖安装。3.0.0 APK 适用于全新安装或签名相同的旧安装。已有本机数据的用户请先保留旧应用并备份。
 

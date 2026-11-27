@@ -50,7 +50,12 @@ data class FocusReviewDay(
     val taskSessions: List<TaskFocusSession> = emptyList(),
 ) {
     val tasks: List<FocusReviewTask> get() = FocusReviewTask.summarize(taskSessions)
-    val hasRecords: Boolean get() = pomodoros > 0 || minutes > 0 || blocks.isNotEmpty()
+    val chronologicalTaskSessions: List<TaskFocusSession> get() = taskSessions.sortedWith(
+        compareByDescending<TaskFocusSession> { it.startedAt.coerceAtLeast(0L) }
+            .thenBy(String.CASE_INSENSITIVE_ORDER) { it.id }
+            .thenBy { it.id }
+    )
+    val hasRecords: Boolean get() = pomodoros > 0 || minutes > 0 || blocks.isNotEmpty() || taskSessions.isNotEmpty()
     val completedBlocks: Int get() = blocks.count { it.isCompleted }
     val shrubs: Int get() = blocks.sumOf { it.shrubs }
     val trees: Int get() = blocks.sumOf { it.trees }
