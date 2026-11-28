@@ -1,6 +1,6 @@
 // Habitica API v3 from the browser. Credentials live only in this page's memory and are never stored.
 export const apiRoot = 'https://habitica.com/api/v3/';
-const client = '5a8238ab-1819-4f7f-a750-f23264719a2d-HabiticaPomodoroSiteKeeper-Web';
+const client = 'a0badcb0-f6b8-40d7-bb79-26b797a01d8e-Pomo-Web';
 const uidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class HabiticaError extends Error {
