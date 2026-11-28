@@ -18,7 +18,7 @@ importScripts('library/qishiAmbient.js');
 
 //------synced variables with popup.js , includes only data (not pointers nor functions)------//
 var Consts = {
-    xClientHeader: "5a8238ab-1819-4f7f-a750-f23264719a2d-HabiticaPomodoroSiteKeeper-v2",
+    xClientHeader: "a0badcb0-f6b8-40d7-bb79-26b797a01d8e-Pomo-Extension",
     serverUrl: 'https://habitica.com/api/v3/',
     serverPathUser: 'user/',
     serverPathTask: 'tasks/sitepass',

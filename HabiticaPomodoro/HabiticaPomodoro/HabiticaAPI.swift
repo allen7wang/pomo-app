@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Habitica API Constants
 struct HabiticaConsts {
-    static let xClientHeader = "5a8238ab-1819-4f7f-a750-f23264719a2d-HabiticaPomodoroSiteKeeper-v2"
+    static let xClientHeader = "a0badcb0-f6b8-40d7-bb79-26b797a01d8e-Pomo"
     static let serverUrl = "https://habitica.com/api/v3/"
     static let pathUser = "user/"
     static let pathUserTasks = "tasks/user"

@@ -73,7 +73,7 @@ Habitica 不是竞品，而是上游平台。它免费，订阅 $4.99/月或 $47
 
 | 项目 | 影响 | 建议 |
 | --- | --- | --- |
-| `x-client` 沿用上游标识 `5a8238ab-…-HabiticaPomodoroSiteKeeper-v2` | 违反 Habitica 第三方工具规范，出问题时会被误认为上游工具，也可能被限流或封禁 | 改为自己的 User ID 加应用名 |
+| ~~`x-client` 沿用上游标识~~（已解决） | 已改为开发者 User ID `a0badcb0-…` 加应用名：Apple `-Pomo`、Android `-Pomo-Android`、Web `-Pomo-Web`、浏览器扩展 `-Pomo-Extension` | 随下个版本发布生效 |
 | 移动端栖时音频地址 404 | iOS 和 Android 的栖时环境音不可用；Mac 只有本机存在栖时仓库时可用 | 迁到 R2 等公开存储，或随包附带精选场景 |
 | 应用内没有栖时声音的署名页 | 随机场景引用了 CC BY 和 CC BY-SA 素材，分发时不满足署名要求 | 从栖时的 `AUDIO_CREDITS.md` 生成「声音来源」页 |
 | Mac 主程序不在沙盒中运行，直接读写 `~/Documents/.habitica-pomodoro/` | 无法直接上架 Mac App Store | 改用用户授权目录或 iCloud 容器，或用 Developer ID 在商店外分发 |

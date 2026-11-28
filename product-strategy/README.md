@@ -25,7 +25,7 @@
 
 1. **差异化成立，但市场小。** 时间块、种植、Top 3、任务专注复盘和 Habitica 双向同步，这几样合在一起，主流番茄钟里没有对等的组合。代价是核心卖点绑定 Habitica。Habitica 注册用户「400 万以上」的说法来自第三方汇总（待核实），活跃用户更少。
 2. **上架前有几处硬伤。**
-   - 请求头 `x-client` 仍使用上游作者的标识（`HabiticaAPI.swift` 第 5 行），不符合 Habitica 对第三方工具的要求。
+   - 请求头 `x-client` 已改为开发者自己的 Habitica User ID（`a0badcb0-…-Pomo`，各端带平台后缀），符合 Habitica 对第三方工具的要求。
    - iOS 和 Android 的「栖时随机场景」从 `allen7wang.github.io/qishi-meditation-web/audio/` 流式读取，该地址 2026-11-28 实测返回 404，移动端的环境音实际不可用。
    - 番时引用了栖时的 CC BY / CC BY-SA 声音，但应用内没有署名页。
    - Mac 主程序不在沙盒中运行，上架 Mac App Store 前需要改造。

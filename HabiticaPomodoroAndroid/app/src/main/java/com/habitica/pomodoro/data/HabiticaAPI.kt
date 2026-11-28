@@ -22,8 +22,8 @@ import java.util.concurrent.TimeUnit
 object HabiticaAPI {
 
     private const val SERVER_URL = "https://habitica.com/api/v3/"
-    // 与 Swift HabiticaConsts.xClientHeader 一致，便于 Habitica 侧识别本应用
-    private const val X_CLIENT = "5a8238ab-1819-4f7f-a750-f23264719a2d-HabiticaPomodoroSiteKeeper-v2"
+    // 与 Swift HabiticaConsts.xClientHeader 使用同一开发者 User ID，后缀区分平台，便于 Habitica 侧识别本应用
+    private const val X_CLIENT = "a0badcb0-f6b8-40d7-bb79-26b797a01d8e-Pomo-Android"
 
     private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
