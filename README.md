@@ -16,6 +16,7 @@
 | 业务规则、历次验证与待验收项 | [FEATURE_PARITY.md](HabiticaPomodoro/FEATURE_PARITY.md) |
 | Apple 离线回归 | [Apple fixtures](HabiticaPomodoro/fixtures/README.md) |
 | Android 离线回归 | [Android fixtures](HabiticaPomodoroAndroid/fixtures/README.md) |
+| 产品与商业化分析 | [product-strategy/README.md](product-strategy/README.md) |
 
 ## 当前源码
 
